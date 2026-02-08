@@ -77,3 +77,67 @@ func TestSpotifyAuthStartMissingConfig(t *testing.T) {
 		t.Errorf("Expected status 500, got %d", resp.StatusCode)
 	}
 }
+
+func TestSpotifyAuthLogout(t *testing.T) {
+	// ARRANGE
+	sessionKey := "test-session-key-32-bytes-long!!"
+	store := session.NewStore(sessionKey, false)
+	handler := handlers.NewSpotifyAuthHandler(store)
+
+	req := httptest.NewRequest("POST", "/api/auth/logout", nil)
+	w := httptest.NewRecorder()
+
+	// Create session with spotify_user_id
+	sess, _ := store.Get(req, session.SessionName)
+	sess.Values["spotify_user_id"] = "test-user-123"
+	sess.Save(req, w)
+
+	// Get the session cookie from first response
+	cookies := w.Result().Cookies()
+	if len(cookies) > 0 {
+		req.AddCookie(cookies[0])
+	}
+
+	// Reset recorder for actual logout test
+	w = httptest.NewRecorder()
+
+	// ACT
+	handler.Logout(w, req)
+
+	// ASSERT
+	resp := w.Result()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	// Verify session was cleared by getting session again
+	req2 := httptest.NewRequest("GET", "/", nil)
+	for _, cookie := range resp.Cookies() {
+		req2.AddCookie(cookie)
+	}
+	sess2, _ := store.Get(req2, session.SessionName)
+	if sess2.Values["spotify_user_id"] != nil {
+		t.Error("Expected spotify_user_id to be cleared from session")
+	}
+}
+
+func TestSpotifyAuthLogoutRequiresPost(t *testing.T) {
+	// ARRANGE
+	sessionKey := "test-session-key-32-bytes-long!!"
+	store := session.NewStore(sessionKey, false)
+	handler := handlers.NewSpotifyAuthHandler(store)
+
+	req := httptest.NewRequest("GET", "/api/auth/logout", nil)
+	w := httptest.NewRecorder()
+
+	// ACT
+	handler.Logout(w, req)
+
+	// ASSERT
+	resp := w.Result()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status 405, got %d", resp.StatusCode)
+	}
+}

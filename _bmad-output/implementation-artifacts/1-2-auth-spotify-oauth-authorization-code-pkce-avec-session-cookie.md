@@ -16,18 +16,24 @@ so that boeuf puisse orchestrer la lecture sur mon appareil.
    - **Then** il est redirigé vers Spotify et revient sur boeuf avec une session active
    - **And** le backend stocke les tokens côté serveur (aucun secret durable côté frontend)
 
-2. **Stockage sécurisé refresh token**
+2. **Déconnexion Spotify**
+   - **Given** un utilisateur authentifié Spotify
+   - **When** il clique sur "Se déconnecter"
+   - **Then** sa session Spotify est effacée côté serveur
+   - **And** il revient à l'état "Non connecté" avec possibilité de reconnecter un autre compte
+
+3. **Stockage sécurisé refresh token**
    - **Given** un refresh token à stocker
    - **When** le backend le persiste
-   - **Then** il est chiffré en base (AES-256-GCM) et la clé n’est jamais exposée au client
+   - **Then** il est chiffré en base (AES-256-GCM) et la clé n'est jamais exposée au client
 
-3. **Refresh automatique**
+4. **Refresh automatique**
    - **Given** un access token expiré ou proche de l’expiration
    - **When** le backend doit appeler Spotify
    - **Then** il rafraîchit automatiquement le token (sans intervention utilisateur)
    - **And** aucune action Spotify n’échoue “silencieusement” à cause d’un token expiré
 
-4. **Abstraction Spotify**
+5. **Abstraction Spotify**
    - **Given** l’intégration Spotify côté backend
    - **When** on implémente la logique d’orchestration
    - **Then** elle est encapsulée derrière une abstraction (ex: interface `StreamingProvider` / `SpotifyClient`)
@@ -61,6 +67,11 @@ so that boeuf puisse orchestrer la lecture sur mon appareil.
 - [x] API "status Spotify" pour le frontend (AC: 1)
   - [x] Endpoint `GET /api/auth/status` renvoyant l'état connecté + profil minimal
   - [x] Frontend : bouton "Connecter Spotify" et affichage "Connecté" (sans fuite tokens)
+
+- [x] API logout Spotify (AC: 2)
+  - [x] Endpoint `POST /api/auth/logout` effaçant `spotify_user_id` de la session
+  - [x] Frontend : bouton "Se déconnecter" visible quand authentifié
+  - [x] Rafraîchissement automatique de l'état après déconnexion
 
 ### Review Follow-ups (Code Review 2026-01-25)
 
@@ -216,6 +227,7 @@ Claude Sonnet 4.5
 - ✅ **[Review Fix]** Frontend Vue OAuth complet: LoginButton.vue + AuthStatus.vue intégrés dans App.vue, tests E2E Playwright (5/5 ✓), tests unitaires (7/7 ✓)
 - ✅ **[Code Review 2]** Corrections qualité: CORS Caddyfile, volume Docker persistence, constantes documentées, console.error conditionnel
 - ✅ **[Code Review 3]** Fixes finaux: Gestion erreurs crypto (Security), Stratégie migration clarifiée (Maintenance)
+- ✅ **[Feature Add 2026-01-27]** Ajout déconnexion Spotify: endpoint POST /api/auth/logout, bouton UI "Se déconnecter", tests backend (2) + frontend (4), validation E2E manuelle. AC2 satisfait.
 
 ### File List
 
@@ -246,9 +258,9 @@ Claude Sonnet 4.5
 - `Caddyfile` (reverse proxy pour /api et /auth)
 - `.gitignore` (ajout .env et binaires)
 - `frontend/src/components/LoginButton.vue` (bouton connexion Spotify)
-- `frontend/src/components/AuthStatus.vue` (affichage statut auth)
+- `frontend/src/components/AuthStatus.vue` (affichage statut auth + bouton déconnexion)
 - `frontend/src/components/__tests__/LoginButton.spec.ts` (tests unitaires)
-- `frontend/src/components/__tests__/AuthStatus.spec.ts` (tests unitaires)
+- `frontend/src/components/__tests__/AuthStatus.spec.ts` (tests unitaires + logout tests)
 - `frontend/src/App.vue` (intégration composants OAuth)
 - `frontend/src/App.spec.ts` (tests unitaires mis à jour)
 - `frontend/e2e/spotify-auth.spec.ts` (tests E2E OAuth flow)
@@ -265,3 +277,4 @@ Claude Sonnet 4.5
 - 2026-01-25 20:52: Code review adversarial complet + corrections: CORS headers Caddyfile, .env.example 127.0.0.1:3000, volume Docker persistence, TokenRefreshBufferMinutes constante, TODOs rate limiting, GORM logs silent, console.error conditionnel. Tests 100% PASS. Story DONE.
 - 2026-01-25 21:10: Final Adversarial Fixes: Refactored Client to use Provider interface (AC4) and implemented Rate Limiting with exponential backoff (AC3). Story truly DONE.
 - 2026-01-25 22:30: Code Review 3 Fixes: Suppression fichier migration, commentaire strategy dans main.go, fix sécurité random number gen. Story validated.
+- 2026-01-27 23:50: Feature Add: Déconnexion Spotify complète avec endpoint POST /api/auth/logout (backend), bouton "Se déconnecter" (frontend), tests complets (backend: TestSpotifyAuthLogout + TestSpotifyAuthLogoutRequiresPost, frontend: 4 nouveaux tests logout), validation E2E manuelle. AC2 satisfait, story updated.

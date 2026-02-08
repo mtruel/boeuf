@@ -155,3 +155,36 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Redirect to frontend
 	http.Redirect(w, r, "/", http.StatusFound)
 }
+
+// Logout clears the Spotify authentication from the session
+func (h *SpotifyAuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST method
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get session
+	sess, err := h.store.Get(r, session.SessionName)
+	if err != nil {
+		log.Printf("ERROR: Failed to get session in logout: %v", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
+	}
+
+	// Clear spotify authentication data
+	delete(sess.Values, "spotify_user_id")
+
+	// Save updated session
+	err = sess.Save(r, w)
+	if err != nil {
+		log.Printf("ERROR: Failed to save session in logout: %v", err)
+		http.Error(w, "Session save error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("INFO: User logged out successfully")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"success":true}`))
+}

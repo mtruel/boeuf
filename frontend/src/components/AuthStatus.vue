@@ -10,6 +10,7 @@ interface AuthStatus {
 const authStatus = ref<AuthStatus | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const loggingOut = ref(false)
 
 async function fetchAuthStatus() {
   loading.value = true
@@ -30,6 +31,31 @@ async function fetchAuthStatus() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function logout() {
+  loggingOut.value = true
+  error.value = null
+
+  try {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      throw new Error(`Logout failed: ${response.status}`)
+    }
+
+    // Refresh auth status after successful logout
+    await fetchAuthStatus()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Erreur de déconnexion'
+    if (import.meta.env.DEV) {
+      console.error('Failed to logout:', e)
+    }
+  } finally {
+    loggingOut.value = false
   }
 }
 
@@ -90,6 +116,14 @@ onMounted(() => {
               {{ authStatus.spotifyUserId }}
             </p>
           </div>
+          <button
+            data-testid="logout-button"
+            @click="logout"
+            :disabled="loggingOut"
+            class="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 border border-red-300 dark:border-red-700 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ loggingOut ? 'Déconnexion...' : 'Se déconnecter' }}
+          </button>
         </div>
       </div>
     </div>

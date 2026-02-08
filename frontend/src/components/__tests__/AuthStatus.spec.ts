@@ -103,4 +103,83 @@ describe('AuthStatus', () => {
         const wrapper = mount(AuthStatus)
         expect(wrapper.find('[data-testid="auth-status"]').exists()).toBe(true)
     })
+
+    it('shows logout button when authenticated', async () => {
+        ; (global.fetch as any).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                authenticated: true,
+                spotifyUserId: 'test-user-123',
+            }),
+        })
+
+        const wrapper = mount(AuthStatus)
+        await flushPromises()
+
+        const logoutButton = wrapper.find('[data-testid="logout-button"]')
+        expect(logoutButton.exists()).toBe(true)
+        expect(logoutButton.text()).toContain('Se déconnecter')
+    })
+
+    it('calls logout endpoint and refreshes on logout button click', async () => {
+        // Mock initial authenticated state
+        ; (global.fetch as any).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                authenticated: true,
+                spotifyUserId: 'test-user-123',
+            }),
+        })
+
+        const wrapper = mount(AuthStatus)
+        await flushPromises()
+
+        // Mock logout endpoint
+        ; (global.fetch as any).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ success: true }),
+        })
+
+        // Mock refresh after logout
+        ; (global.fetch as any).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ authenticated: false }),
+        })
+
+        const logoutButton = wrapper.find('[data-testid="logout-button"]')
+        await logoutButton.trigger('click')
+        await flushPromises()
+
+        // Verify logout was called with POST
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/logout', {
+            method: 'POST',
+        })
+
+        // Verify status was refreshed
+        expect(wrapper.text()).toContain('Non connecté')
+    })
+
+    it('handles logout error gracefully', async () => {
+        // Mock initial authenticated state
+        ; (global.fetch as any).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                authenticated: true,
+                spotifyUserId: 'test-user-123',
+            }),
+        })
+
+        const wrapper = mount(AuthStatus)
+        await flushPromises()
+
+        // Mock logout failure
+        ; (global.fetch as any).mockRejectedValueOnce(new Error('Logout failed'))
+
+        const logoutButton = wrapper.find('[data-testid="logout-button"]')
+        await logoutButton.trigger('click')
+        await flushPromises()
+
+        // Should show error
+        expect(wrapper.text()).toContain('Erreur')
+    })
 })
