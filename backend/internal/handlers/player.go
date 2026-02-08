@@ -318,10 +318,24 @@ func (h *PlayerHandler) SeekPlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate position is within track duration
+	// Validate position is within track duration (BUG #6 - AC extension)
 	if *req.PositionMs > currentState.DurationMs {
-		RespondError(w, http.StatusBadRequest, "INVALID_POSITION",
-			fmt.Sprintf("positionMs (%d) exceeds track duration (%d)", *req.PositionMs, currentState.DurationMs))
+		log.Printf("WARNING: Seek validation failed - positionMs (%d) exceeds track duration (%d) for track %s (indicates stale metadata)",
+			*req.PositionMs, currentState.DurationMs, currentState.TrackID)
+
+		// Return 400 with current track metadata to help client sync
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    "INVALID_POSITION",
+			"message": fmt.Sprintf("positionMs (%d) exceeds track duration (%d)", *req.PositionMs, currentState.DurationMs),
+			"metadata": map[string]interface{}{
+				"trackId":    currentState.TrackID,
+				"trackName":  currentState.TrackName,
+				"durationMs": currentState.DurationMs,
+				"artist":     currentState.Artist,
+			},
+		})
 		return
 	}
 
@@ -413,6 +427,14 @@ func (h *PlayerHandler) validateSyncState(sessionID, userID string) error {
 		return fmt.Errorf("participant must be in synced state")
 	}
 
+	// Update last_seen_at to keep participant active (AC 1.10)
+	now := time.Now()
+	participant.LastSeenAt = now.Unix()
+	if err := h.db.Save(&participant).Error; err != nil {
+		log.Printf("WARNING: Failed to update participant last_seen_at: %v", err)
+		// Don't fail - this is just a timestamp update
+	}
+
 	return nil
 }
 
@@ -501,4 +523,3 @@ func (h *PlayerHandler) persistEvent(sessionID string, eventSeq int64, eventType
 	}
 	return nil
 }
-

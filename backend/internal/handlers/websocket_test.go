@@ -39,6 +39,29 @@ func setupTestWebSocket(t *testing.T) (*WebSocketHandler, *gorm.DB, *sessions.Co
 	// Create handler
 	handler := NewWebSocketHandler(hub, store, db)
 
+	// Insert test Spotify tokens for common test users
+	testTokens := []models.SpotifyToken{
+		{
+			SpotifyUserID:         "user_test_1",
+			DisplayName:           "Test User 1",
+			AccessToken:           "test-access-token",
+			RefreshTokenEncrypted: "test-refresh-token",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+		{
+			SpotifyUserID:         "user_test_2",
+			DisplayName:           "Test User 2",
+			AccessToken:           "test-access-token-2",
+			RefreshTokenEncrypted: "test-refresh-token-2",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+	}
+	for _, token := range testTokens {
+		db.Create(&token)
+	}
+
 	return handler, db, store, hub
 }
 
@@ -62,7 +85,7 @@ func TestWebSocketUpgradeWithAuth(t *testing.T) {
 		UserID:     userID,
 		Role:       "host",
 		JoinedAt:   time.Now(),
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 	}
 	db.Create(&participant)
 
@@ -211,7 +234,7 @@ func TestWebSocketRefuseNonParticipant(t *testing.T) {
 		UserID:     ownerID,
 		Role:       "host",
 		JoinedAt:   time.Now(),
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 	}
 	db.Create(&participant)
 
@@ -303,7 +326,7 @@ func TestParticipantJoinedBroadcast(t *testing.T) {
 		UserID:     user1ID,
 		Role:       "host",
 		JoinedAt:   time.Now(),
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 	})
 
 	db.Create(&models.SessionParticipant{
@@ -311,7 +334,7 @@ func TestParticipantJoinedBroadcast(t *testing.T) {
 		UserID:     user2ID,
 		Role:       "participant",
 		JoinedAt:   time.Now(),
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 	})
 
 	// Create server
@@ -410,7 +433,7 @@ func TestEventSeqMonotonic(t *testing.T) {
 		UserID:     userID,
 		Role:       "host",
 		JoinedAt:   time.Now(),
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 	}
 	db.Create(&participant)
 
@@ -476,7 +499,7 @@ func TestWebSocketRefuseEmptySession(t *testing.T) {
 		UserID:     userID,
 		Role:       "host",
 		JoinedAt:   time.Now(),
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 	}
 	db.Create(&participant)
 
@@ -523,8 +546,8 @@ func TestWebSocketEndToEndIntegration(t *testing.T) {
 
 	// Create participants
 	participants := []models.SessionParticipant{
-		{SessionID: sessionID, UserID: user1ID, Role: "host", JoinedAt: time.Now(), LastSeenAt: time.Now()},
-		{SessionID: sessionID, UserID: user2ID, Role: "participant", JoinedAt: time.Now(), LastSeenAt: time.Now()},
+		{SessionID: sessionID, UserID: user1ID, Role: "host", JoinedAt: time.Now(), LastSeenAt: time.Now().Unix()},
+		{SessionID: sessionID, UserID: user2ID, Role: "participant", JoinedAt: time.Now(), LastSeenAt: time.Now().Unix()},
 	}
 	for _, p := range participants {
 		db.Create(&p)

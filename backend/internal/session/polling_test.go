@@ -79,7 +79,7 @@ func TestPlayerPoller_StartAndStopSessionPolling(t *testing.T) {
 		UserID:     "test-user",
 		JoinedAt:   time.Now(),
 		Role:       "host",
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 		SyncState:  "synced",
 	}
 	db.Create(participant)
@@ -153,7 +153,7 @@ func TestPlayerPoller_HasActiveSyncedParticipants(t *testing.T) {
 		UserID:     "inactive-user",
 		JoinedAt:   time.Now(),
 		Role:       "participant",
-		LastSeenAt: time.Now().Add(-1 * time.Hour), // Very old
+		LastSeenAt: time.Now().Add(-1 * time.Hour).Unix(), // Very old
 		SyncState:  "synced",
 	}
 	db.Create(inactiveParticipant)
@@ -168,7 +168,7 @@ func TestPlayerPoller_HasActiveSyncedParticipants(t *testing.T) {
 		UserID:     "active-user",
 		JoinedAt:   time.Now(),
 		Role:       "host",
-		LastSeenAt: time.Now(), // Recent
+		LastSeenAt: time.Now().Unix(), // Recent
 		SyncState:  "synced",
 	}
 	db.Create(activeParticipant)
@@ -203,7 +203,7 @@ func TestPlayerPoller_GetActiveSyncedParticipant(t *testing.T) {
 		UserID:     "test-user",
 		JoinedAt:   time.Now(),
 		Role:       "host",
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 		SyncState:  "synced",
 	}
 	db.Create(participant)
@@ -369,7 +369,7 @@ func TestPlayerPoller_PollOnce_WithParticipant(t *testing.T) {
 		UserID:     "test-user",
 		JoinedAt:   time.Now(),
 		Role:       "host",
-		LastSeenAt: time.Now(),
+		LastSeenAt: time.Now().Unix(),
 		SyncState:  "synced",
 	}
 	db.Create(participant)

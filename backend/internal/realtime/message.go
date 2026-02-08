@@ -41,6 +41,7 @@ type SessionSnapshotPayload struct {
 // ParticipantInfo represents a session participant's status
 type ParticipantInfo struct {
 	UserID           string `json:"userId"`
+	DisplayName      string `json:"displayName"`      // Spotify user display name
 	Role             string `json:"role"`             // "host" or "participant"
 	SyncState        string `json:"syncState"`        // "ready" or "synced"
 	LastSeenAt       string `json:"lastSeenAt"`       // RFC3339 UTC

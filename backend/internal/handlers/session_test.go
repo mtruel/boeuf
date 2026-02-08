@@ -18,10 +18,49 @@ const testBaseURL = "http://test-server"
 
 func setupSessionTest() (*gorm.DB, *SessionHandler, *sessions.CookieStore) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{})
+	db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}, &models.SpotifyToken{})
 
 	store := sessions.NewCookieStore([]byte("test-session-key-1234567890123456"))
 	handler := NewSessionHandler(store, db, testBaseURL)
+
+	// Insert test Spotify tokens for common test users
+	testTokens := []models.SpotifyToken{
+		{
+			SpotifyUserID:         "test_user_123",
+			DisplayName:           "Test User",
+			AccessToken:           "test-access-token",
+			RefreshTokenEncrypted: "test-refresh-token",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+		{
+			SpotifyUserID:         "test-user-456",
+			DisplayName:           "Another Test User",
+			AccessToken:           "test-access-token-2",
+			RefreshTokenEncrypted: "test-refresh-token-2",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+		{
+			SpotifyUserID:         "test_user_1",
+			DisplayName:           "Test User 1",
+			AccessToken:           "test-access-token-3",
+			RefreshTokenEncrypted: "test-refresh-token-3",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+		{
+			SpotifyUserID:         "test_user_2",
+			DisplayName:           "Test User 2",
+			AccessToken:           "test-access-token-4",
+			RefreshTokenEncrypted: "test-refresh-token-4",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+	}
+	for _, token := range testTokens {
+		db.Create(&token)
+	}
 
 	return db, handler, store
 }
@@ -159,7 +198,18 @@ func TestCreateSession_NoSpotifyTokensInResponse(t *testing.T) {
 
 func TestCreateSession_CustomSessionDuration(t *testing.T) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{})
+	db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}, &models.SpotifyToken{})
+	
+	// Insert test token
+	db.Create(&models.SpotifyToken{
+		SpotifyUserID:         "test_user_123",
+		DisplayName:           "Test User",
+		AccessToken:           "test-access-token",
+		RefreshTokenEncrypted: "test-refresh-token",
+		ExpiresAt:             time.Now().Add(1 * time.Hour),
+		Scope:                 "user-read-playback-state user-modify-playback-state",
+	})
+	
 	store := sessions.NewCookieStore([]byte("test-session-key-1234567890123456"))
 	
 	// Create handler with custom 2-hour session duration
@@ -201,7 +251,18 @@ func TestCreateSession_CustomSessionDuration(t *testing.T) {
 
 func TestCreateSession_RateLimitExceeded(t *testing.T) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{})
+	db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}, &models.SpotifyToken{})
+	
+	// Insert test token
+	db.Create(&models.SpotifyToken{
+		SpotifyUserID:         "test_user_123",
+		DisplayName:           "Test User",
+		AccessToken:           "test-access-token",
+		RefreshTokenEncrypted: "test-refresh-token",
+		ExpiresAt:             time.Now().Add(1 * time.Hour),
+		Scope:                 "user-read-playback-state user-modify-playback-state",
+	})
+	
 	store := sessions.NewCookieStore([]byte("test-session-key-1234567890123456"))
 
 	// Create handler with max 2 active sessions per user

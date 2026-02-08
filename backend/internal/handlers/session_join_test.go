@@ -21,9 +21,24 @@ func setupJoinTestDB(t *testing.T) (*gorm.DB, func()) {
 	}
 
 	// Run migrations
-	err = db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{})
+	err = db.AutoMigrate(&models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}, &models.SpotifyToken{})
 	if err != nil {
 		t.Fatalf("Failed to migrate test database: %v", err)
+	}
+
+	// Insert test Spotify tokens for common test users
+	testTokens := []models.SpotifyToken{
+		{
+			SpotifyUserID:         "test-user-123",
+			DisplayName:           "Test User",
+			AccessToken:           "test-access-token",
+			RefreshTokenEncrypted: "test-refresh-token",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+	}
+	for _, token := range testTokens {
+		db.Create(&token)
 	}
 
 	cleanup := func() {
@@ -296,7 +311,7 @@ func TestJoinSession_AlreadyParticipant(t *testing.T) {
 		UserID:     userID,
 		JoinedAt:   now.Add(-1 * time.Hour),
 		Role:       "participant",
-		LastSeenAt: now.Add(-1 * time.Hour),
+		LastSeenAt: now.Add(-1 * time.Hour).Unix(),
 	}
 	db.Create(&existingParticipant)
 
@@ -338,7 +353,7 @@ func TestJoinSession_AlreadyParticipant(t *testing.T) {
 	var updatedParticipant models.SessionParticipant
 	db.Where("session_id = ? AND user_id = ?", sessionID, userID).First(&updatedParticipant)
 
-	if updatedParticipant.LastSeenAt.Before(existingParticipant.LastSeenAt) {
+	if updatedParticipant.LastSeenAt < existingParticipant.LastSeenAt {
 		t.Errorf("Expected LastSeenAt to be updated")
 	}
 }

@@ -91,7 +91,7 @@ func TestSessionParticipantModel(t *testing.T) {
 			UserID:     "user456",
 			JoinedAt:   time.Now(),
 			Role:       "host",
-			LastSeenAt: time.Now(),
+			LastSeenAt: time.Now().Unix(),
 		}
 		
 		result := db.Create(&participant)
@@ -146,7 +146,7 @@ func TestSessionModelsIntegration(t *testing.T) {
 			UserID:     "creator123",
 			JoinedAt:   now,
 			Role:       "host",
-			LastSeenAt: now,
+			LastSeenAt: now.Unix(),
 		}
 		result = db.Create(&participant)
 		assert.NoError(t, result.Error)

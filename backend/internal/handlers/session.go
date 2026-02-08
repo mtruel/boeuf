@@ -205,13 +205,22 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch display name from spotify_tokens table
+	var spotifyToken models.SpotifyToken
+	if err := h.db.Where("spotify_user_id = ?", userID).First(&spotifyToken).Error; err != nil {
+		log.Printf("ERROR: Failed to fetch spotify token for display name: %v", err)
+		h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch user info")
+		return
+	}
+
 	// Add creator as participant
 	participant := models.SessionParticipant{
-		SessionID:  sessionID,
-		UserID:     userID,
-		JoinedAt:   now,
-		Role:       "host", // Creator is the host
-		LastSeenAt: now,
+		SessionID:   sessionID,
+		UserID:      userID,
+		DisplayName: spotifyToken.DisplayName,
+		JoinedAt:    now,
+		Role:        "host", // Creator is the host
+		LastSeenAt:  now.Unix(),
 	}
 
 	if err := h.db.Create(&participant).Error; err != nil {
@@ -366,13 +375,22 @@ func (h *SessionHandler) Join(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 
 	if err == gorm.ErrRecordNotFound {
+		// Fetch display name from spotify_tokens table
+		var spotifyToken models.SpotifyToken
+		if err := h.db.Where("spotify_user_id = ?", userID).First(&spotifyToken).Error; err != nil {
+			log.Printf("ERROR: Failed to fetch spotify token for display name: %v", err)
+			h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch user info")
+			return
+		}
+
 		// Create new participant
 		participant := models.SessionParticipant{
-			SessionID:  invite.SessionID,
-			UserID:     userID,
-			JoinedAt:   now,
-			Role:       "participant",
-			LastSeenAt: now,
+			SessionID:   invite.SessionID,
+			UserID:      userID,
+			DisplayName: spotifyToken.DisplayName,
+			JoinedAt:    now,
+			Role:        "participant",
+			LastSeenAt:  now.Unix(),
 		}
 
 		if err := h.db.Create(&participant).Error; err != nil {
@@ -386,7 +404,7 @@ func (h *SessionHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	} else {
 		// Update last_seen_at for existing participant (idempotent)
-		existingParticipant.LastSeenAt = now
+		existingParticipant.LastSeenAt = now.Unix()
 		if err := h.db.Save(&existingParticipant).Error; err != nil {
 			log.Printf("WARNING: Failed to update participant last_seen_at: %v", err)
 			// Don't fail the request - this is just a timestamp update
@@ -410,6 +428,22 @@ func (h *SessionHandler) sendErrorResponse(w http.ResponseWriter, statusCode int
 	response := map[string]interface{}{
 		"code":    code,
 		"message": message,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *SessionHandler) sendDeviceErrorResponse(w http.ResponseWriter, statusCode int, code, message, suggestedAction string, requiresActiveDevice bool) {
+	response := map[string]interface{}{
+		"code":            code,
+		"message":         message,
+		"suggestedAction": suggestedAction,
+	}
+
+	if requiresActiveDevice {
+		response["requiresActiveDevice"] = true
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -468,7 +502,7 @@ func (h *SessionHandler) GetParticipantMe(w http.ResponseWriter, r *http.Request
 		UserID:     participant.UserID,
 		Role:       participant.Role,
 		SyncState:  participant.SyncState,
-		LastSeenAt: participant.LastSeenAt.Format(time.RFC3339),
+		LastSeenAt: time.Unix(participant.LastSeenAt, 0).Format(time.RFC3339),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -496,6 +530,9 @@ type StartSyncResponse struct {
 }
 
 var errSpotifyPlayerUnavailable = errors.New("SPOTIFY_PLAYER_UNAVAILABLE")
+var errSpotifyNoDevice = errors.New("SPOTIFY_NO_DEVICE")
+
+const suggestedActionOpenSpotifyWebPlayer = "OPEN_SPOTIFY_WEB_PLAYER"
 
 // StartSync marks the participant as synced and initializes synchronization
 // POST /api/sessions/:sessionId/sync/start
@@ -581,6 +618,42 @@ func (h *SessionHandler) StartSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pre-check: Verify at least one device is available BEFORE starting sync (AC 1)
+	devices, err := h.spotifyClient.GetAvailableDevices(ctx, userID)
+	if err != nil {
+		var rateLimited *spotify.RateLimitedError
+		if errors.As(err, &rateLimited) {
+			msg := "Spotify is rate limiting requests. Please retry in a moment."
+			if rateLimited.RetryAfterSeconds > 0 {
+				msg = fmt.Sprintf("Spotify is rate limiting requests. Please retry after %d seconds.", rateLimited.RetryAfterSeconds)
+			}
+			h.sendErrorResponse(w, http.StatusServiceUnavailable, "SPOTIFY_RATE_LIMITED", msg)
+		} else {
+			log.Printf("ERROR: Failed to get Spotify devices: %v", err)
+			h.sendErrorResponse(w, http.StatusServiceUnavailable, "SPOTIFY_UNAVAILABLE", "Failed to check Spotify devices")
+		}
+		return
+	}
+
+	// AC 1: No device available → return 503 with requiresActiveDevice flag
+	if len(devices) == 0 {
+		log.Printf("INFO: No active Spotify device found for user %s", userID)
+		h.sendDeviceErrorResponse(
+			w,
+			http.StatusServiceUnavailable,
+			"SPOTIFY_NO_DEVICE",
+			"No active Spotify device found. Please start playback in Spotify.",
+			suggestedActionOpenSpotifyWebPlayer,
+			true,
+		)
+		return
+	}
+
+	// Log device info for debugging
+	for _, device := range devices {
+		log.Printf("DEBUG: Device found - Name: %s, Type: %s, Active: %v", device.Name, device.Type, device.IsActive)
+	}
+
 	// Get current playback state from Spotify
 	nowPlaying, err := h.getCurrentPlayback(ctx, accessToken)
 	if err != nil {
@@ -595,7 +668,14 @@ func (h *SessionHandler) StartSync(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, spotify.ErrSpotifyNotConnected):
 			h.sendErrorResponse(w, http.StatusConflict, "SPOTIFY_NOT_CONNECTED", "Please connect your Spotify account to start listening")
 		case errors.Is(err, errSpotifyPlayerUnavailable):
-			h.sendErrorResponse(w, http.StatusServiceUnavailable, "SPOTIFY_PLAYER_UNAVAILABLE", "No active Spotify device found. Start Spotify on any device and retry.")
+			h.sendDeviceErrorResponse(
+				w,
+				http.StatusServiceUnavailable,
+				"SPOTIFY_PLAYER_UNAVAILABLE",
+				"No active Spotify device found. Start Spotify on any device and retry.",
+				suggestedActionOpenSpotifyWebPlayer,
+				true,
+			)
 		default:
 			log.Printf("ERROR: Failed to get Spotify playback: %v", err)
 			h.sendErrorResponse(w, http.StatusServiceUnavailable, "SPOTIFY_UNAVAILABLE", "Failed to fetch Spotify playback state")
@@ -628,7 +708,7 @@ func (h *SessionHandler) StartSync(w http.ResponseWriter, r *http.Request) {
 
 	// Update participant sync state
 	participant.SyncState = "synced"
-	participant.LastSeenAt = time.Now()
+	participant.LastSeenAt = time.Now().Unix()
 	if err := h.db.Save(&participant).Error; err != nil {
 		log.Printf("ERROR: Failed to update participant sync state: %v", err)
 		h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update sync state")

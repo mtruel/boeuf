@@ -34,7 +34,90 @@ func setupSyncTest() (*gorm.DB, *SessionHandler, *sessions.CookieStore) {
 	handler.SetSpotifyClient(spotifyClient)
 	handler.SetRealtimeHub(hub)
 
+	// Insert test Spotify tokens for common test users
+	testTokens := []models.SpotifyToken{
+		{
+			SpotifyUserID:         "test-user-456",
+			DisplayName:           "Test User",
+			AccessToken:           "test-access-token",
+			RefreshTokenEncrypted: "test-refresh-token",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+		{
+			SpotifyUserID:         "user1",
+			DisplayName:           "User One",
+			AccessToken:           "token1",
+			RefreshTokenEncrypted: "refresh1",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+		{
+			SpotifyUserID:         "user2",
+			DisplayName:           "User Two",
+			AccessToken:           "token2",
+			RefreshTokenEncrypted: "refresh2",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+	}
+	for _, token := range testTokens {
+		db.Create(&token)
+	}
+
 	return db, handler, store
+}
+
+// configureSpotifyMock configures the handler and client to use the mock server
+func configureSpotifyMock(handler *SessionHandler, mockServer *httptest.Server) {
+	handler.SetSpotifyAPIBaseURL(mockServer.URL)
+	handler.SetSpotifyHTTPClient(mockServer.Client())
+	handler.spotifyClient.SetAPIBaseURL(mockServer.URL + "/v1")
+	handler.spotifyClient.SetTokenURL(mockServer.URL + "/api/token")
+}
+
+// setupSpotifyMock creates a mock Spotify server with devices and player endpoints
+func setupSpotifyMock(t *testing.T, deviceCount int, playerResponse interface{}) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case r.URL.Path == "/v1/me/player/devices":
+			// Return devices list
+			devices := make([]map[string]interface{}, deviceCount)
+			for i := 0; i < deviceCount; i++ {
+				devices[i] = map[string]interface{}{
+					"id":        "device_" + string(rune('1'+i)),
+					"name":      "Test Device " + string(rune('1'+i)),
+					"type":      "Computer",
+					"is_active": i == 0, // First device is active
+				}
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"devices": devices,
+			})
+
+		case r.URL.Path == "/v1/me/player":
+			// Return player state
+			if playerResponse == nil {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				json.NewEncoder(w).Encode(playerResponse)
+			}
+
+		case r.URL.Path == "/api/token":
+			// Mock token refresh endpoint
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"access_token": "refreshed-access-token",
+				"expires_in":   3600,
+				"scope":        "user-read-playback-state",
+			})
+
+		default:
+			t.Logf("Unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
 }
 
 func TestGetParticipantMe_Success(t *testing.T) {
@@ -56,7 +139,7 @@ func TestGetParticipantMe_Success(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "ready",
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Create request with auth
@@ -163,7 +246,7 @@ func TestStartSync_AlreadySynced_Idempotent(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "synced", // Already synced
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Create request with auth
@@ -228,9 +311,9 @@ func TestStartSync_NotParticipant(t *testing.T) {
 func TestStartSync_NoSpotifyToken(t *testing.T) {
 	db, handler, store := setupSyncTest()
 
-	// Create session and participant (no Spotify token)
+	// Create session and participant (with user that has NO Spotify token)
 	sessionID := "test-session-123"
-	userID := "test-user-456"
+	userID := "user-without-token" // Use user that doesn't have a token in setupSyncTest
 	now := time.Now()
 	db.Create(&models.Session{
 		ID:        sessionID,
@@ -244,7 +327,7 @@ func TestStartSync_NoSpotifyToken(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "ready",
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Create request with auth
@@ -305,7 +388,7 @@ func TestStartSync_HappyPath_UpdatesSyncStateAndBaseline(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "ready",
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Add Spotify token
@@ -318,35 +401,26 @@ func TestStartSync_HappyPath_UpdatesSyncStateAndBaseline(t *testing.T) {
 		SpotifyUserID:         userID,
 		AccessToken:           "test-access-token",
 		RefreshTokenEncrypted: encryptedRefresh,
-		ExpiresAt:             time.Now().Add(1 * time.Hour),
+		ExpiresAt:             time.Now().Add(1 * time.Hour), // Far future to avoid refresh during test
 		Scope:                 "user-read-playback-state",
 	})
 
-	// Mock Spotify /v1/me/player
-	spotifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me/player" {
-			t.Fatalf("Unexpected path: %s", r.URL.Path)
-		}
-		if got := r.Header.Get("Authorization"); got != "Bearer test-access-token" {
-			t.Fatalf("Unexpected Authorization header: %s", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"item": map[string]interface{}{
-				"id":          "track_123",
-				"name":        "Test Song",
-				"duration_ms": 200000,
-				"artists": []map[string]interface{}{
-					{"name": "Test Artist"},
-				},
+	// Mock Spotify with devices and player
+	playerResp := map[string]interface{}{
+		"item": map[string]interface{}{
+			"id":          "track_123",
+			"name":        "Test Song",
+			"duration_ms": 200000,
+			"artists": []map[string]interface{}{
+				{"name": "Test Artist"},
 			},
-			"is_playing":  true,
-			"progress_ms": 1000,
-		})
-	}))
+		},
+		"is_playing":  true,
+		"progress_ms": 1000,
+	}
+	spotifyServer := setupSpotifyMock(t, 1, playerResp) // 1 device available
 	defer spotifyServer.Close()
-	handler.SetSpotifyAPIBaseURL(spotifyServer.URL)
-	handler.SetSpotifyHTTPClient(spotifyServer.Client())
+	configureSpotifyMock(handler, spotifyServer)
 
 	// Drain broadcast to avoid blocking
 	received := make(chan *realtime.BroadcastMessage, 1)
@@ -416,25 +490,22 @@ func TestStartSync_BroadcastsParticipantSyncStateChanged(t *testing.T) {
 	userID := "test-user-456"
 	now := time.Now()
 	handler.db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
-	handler.db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now})
+	handler.db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
 	handler.db.Create(&models.SpotifyToken{SpotifyUserID: userID, AccessToken: "test-access-token", RefreshTokenEncrypted: "dummy", ExpiresAt: time.Now().Add(1 * time.Hour), Scope: "user-read-playback-state"})
 
-	spotifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"item": map[string]interface{}{
-				"id":          "track_123",
-				"name":        "Test Song",
-				"duration_ms": 200000,
-				"artists":     []map[string]interface{}{{"name": "Test Artist"}},
-			},
-			"is_playing":  true,
-			"progress_ms": 1000,
-		})
-	}))
+	playerResp := map[string]interface{}{
+		"item": map[string]interface{}{
+			"id":          "track_123",
+			"name":        "Test Song",
+			"duration_ms": 200000,
+			"artists":     []map[string]interface{}{{"name": "Test Artist"}},
+		},
+		"is_playing":  true,
+		"progress_ms": 1000,
+	}
+	spotifyServer := setupSpotifyMock(t, 1, playerResp)
 	defer spotifyServer.Close()
-	handler.SetSpotifyAPIBaseURL(spotifyServer.URL)
-	handler.SetSpotifyHTTPClient(spotifyServer.Client())
+	configureSpotifyMock(handler, spotifyServer)
 
 	broadcastCh := make(chan *realtime.BroadcastMessage, 1)
 	go func() {
@@ -484,6 +555,7 @@ func TestStartSync_BroadcastsParticipantSyncStateChanged(t *testing.T) {
 	}
 }
 
+// TestStartSync_PlayerUnavailable_ReturnsStableError tests BUG #1 fix: no device returns SPOTIFY_NO_DEVICE
 func TestStartSync_PlayerUnavailable_ReturnsStableError(t *testing.T) {
 	db, handler, store := setupSyncTest()
 
@@ -491,15 +563,97 @@ func TestStartSync_PlayerUnavailable_ReturnsStableError(t *testing.T) {
 	userID := "test-user-456"
 	now := time.Now()
 	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
-	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now})
+	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
 	db.Create(&models.SpotifyToken{SpotifyUserID: userID, AccessToken: "test-access-token", RefreshTokenEncrypted: "dummy", ExpiresAt: time.Now().Add(1 * time.Hour), Scope: "user-read-playback-state"})
 
-	spotifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	// Mock Spotify with NO devices - should return 503 SPOTIFY_NO_DEVICE
+	spotifyServer := setupSpotifyMock(t, 0, nil)
 	defer spotifyServer.Close()
-	handler.SetSpotifyAPIBaseURL(spotifyServer.URL)
-	handler.SetSpotifyHTTPClient(spotifyServer.Client())
+	configureSpotifyMock(handler, spotifyServer)
+
+	req := httptest.NewRequest("POST", "/api/sessions/"+sessionID+"/sync/start", nil)
+	req = mux.SetURLVars(req, map[string]string{"sessionId": sessionID})
+	w := httptest.NewRecorder()
+	sess, _ := store.Get(req, "boeuf-session")
+	sess.Values["spotify_user_id"] = userID
+	sess.Save(req, w)
+
+	handler.StartSync(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["code"] != "SPOTIFY_NO_DEVICE" {
+		t.Fatalf("Expected SPOTIFY_NO_DEVICE, got %v", resp["code"])
+	}
+	if resp["requiresActiveDevice"] != true {
+		t.Fatalf("Expected requiresActiveDevice=true, got %v", resp["requiresActiveDevice"])
+	}
+	if resp["suggestedAction"] != "OPEN_SPOTIFY_WEB_PLAYER" {
+		t.Fatalf("Expected suggestedAction OPEN_SPOTIFY_WEB_PLAYER, got %v", resp["suggestedAction"])
+	}
+	if !strings.Contains(resp["message"].(string), "No active Spotify device found") {
+		t.Fatalf("Expected device error message, got %v", resp["message"])
+	}
+}
+
+// TestStartSync_NoDevice_ReturnsRequiresActiveDeviceFlag validates AC 1: requiresActiveDevice flag
+func TestStartSync_NoDevice_ReturnsRequiresActiveDeviceFlag(t *testing.T) {
+	db, handler, store := setupSyncTest()
+
+	sessionID := "test-session-123"
+	userID := "test-user-456"
+	now := time.Now()
+	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
+	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
+	db.Create(&models.SpotifyToken{SpotifyUserID: userID, AccessToken: "test-access-token", RefreshTokenEncrypted: "dummy", ExpiresAt: time.Now().Add(1 * time.Hour), Scope: "user-read-playback-state"})
+
+	// Mock Spotify with NO devices - should return 503 SPOTIFY_NO_DEVICE
+	spotifyServer := setupSpotifyMock(t, 0, nil)
+	defer spotifyServer.Close()
+	configureSpotifyMock(handler, spotifyServer)
+
+	req := httptest.NewRequest("POST", "/api/sessions/"+sessionID+"/sync/start", nil)
+	req = mux.SetURLVars(req, map[string]string{"sessionId": sessionID})
+	w := httptest.NewRecorder()
+	sess, _ := store.Get(req, "boeuf-session")
+	sess.Values["spotify_user_id"] = userID
+	sess.Save(req, w)
+
+	handler.StartSync(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected status 503, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["code"] != "SPOTIFY_NO_DEVICE" {
+		t.Fatalf("Expected SPOTIFY_NO_DEVICE, got %v", resp["code"])
+	}
+	if resp["requiresActiveDevice"] != true {
+		t.Fatalf("Expected requiresActiveDevice=true, got %v", resp["requiresActiveDevice"])
+	}
+	if resp["suggestedAction"] != "OPEN_SPOTIFY_WEB_PLAYER" {
+		t.Fatalf("Expected suggestedAction OPEN_SPOTIFY_WEB_PLAYER, got %v", resp["suggestedAction"])
+	}
+}
+
+func TestStartSync_PlayerUnavailable_WithDevice_ReturnsSuggestedAction(t *testing.T) {
+	db, handler, store := setupSyncTest()
+
+	sessionID := "test-session-123"
+	userID := "test-user-456"
+	now := time.Now()
+	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
+	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
+	db.Create(&models.SpotifyToken{SpotifyUserID: userID, AccessToken: "test-access-token", RefreshTokenEncrypted: "dummy", ExpiresAt: time.Now().Add(1 * time.Hour), Scope: "user-read-playback-state"})
+
+	// Mock Spotify with 1 device but no active playback (204 No Content)
+	spotifyServer := setupSpotifyMock(t, 1, nil)
+	defer spotifyServer.Close()
+	configureSpotifyMock(handler, spotifyServer)
 
 	req := httptest.NewRequest("POST", "/api/sessions/"+sessionID+"/sync/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"sessionId": sessionID})
@@ -518,6 +672,12 @@ func TestStartSync_PlayerUnavailable_ReturnsStableError(t *testing.T) {
 	if resp["code"] != "SPOTIFY_PLAYER_UNAVAILABLE" {
 		t.Fatalf("Expected SPOTIFY_PLAYER_UNAVAILABLE, got %v", resp["code"])
 	}
+	if resp["requiresActiveDevice"] != true {
+		t.Fatalf("Expected requiresActiveDevice=true, got %v", resp["requiresActiveDevice"])
+	}
+	if resp["suggestedAction"] != "OPEN_SPOTIFY_WEB_PLAYER" {
+		t.Fatalf("Expected suggestedAction OPEN_SPOTIFY_WEB_PLAYER, got %v", resp["suggestedAction"])
+	}
 }
 
 func TestStartSync_RateLimited_ReturnsStableError(t *testing.T) {
@@ -527,16 +687,16 @@ func TestStartSync_RateLimited_ReturnsStableError(t *testing.T) {
 	userID := "test-user-456"
 	now := time.Now()
 	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
-	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now})
+	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
 	db.Create(&models.SpotifyToken{SpotifyUserID: userID, AccessToken: "test-access-token", RefreshTokenEncrypted: "dummy", ExpiresAt: time.Now().Add(1 * time.Hour), Scope: "user-read-playback-state"})
 
+	// Mock Spotify rate limited response
 	spotifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "3")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer spotifyServer.Close()
-	handler.SetSpotifyAPIBaseURL(spotifyServer.URL)
-	handler.SetSpotifyHTTPClient(spotifyServer.Client())
+	configureSpotifyMock(handler, spotifyServer)
 
 	req := httptest.NewRequest("POST", "/api/sessions/"+sessionID+"/sync/start", nil)
 	req = mux.SetURLVars(req, map[string]string{"sessionId": sessionID})
@@ -565,7 +725,7 @@ func TestStartSync_TimingUnder3Seconds(t *testing.T) {
 	userID := "test-user-456"
 	now := time.Now()
 	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
-	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now})
+	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
 
 	encryptionKey := "12345678901234567890123456789012"
 	encryptedRefresh, _ := spotify.EncryptForTest("test-refresh-token", encryptionKey)
@@ -577,22 +737,19 @@ func TestStartSync_TimingUnder3Seconds(t *testing.T) {
 		Scope:                 "user-read-playback-state",
 	})
 
-	spotifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"item": map[string]interface{}{
-				"id":          "track_123",
-				"name":        "Test Song",
-				"duration_ms": 200000,
-				"artists":     []map[string]interface{}{{"name": "Test Artist"}},
-			},
-			"is_playing":  true,
-			"progress_ms": 1000,
-		})
-	}))
+	playerResp := map[string]interface{}{
+		"item": map[string]interface{}{
+			"id":          "track_123",
+			"name":        "Test Song",
+			"duration_ms": 200000,
+			"artists":     []map[string]interface{}{{"name": "Test Artist"}},
+		},
+		"is_playing":  true,
+		"progress_ms": 1000,
+	}
+	spotifyServer := setupSpotifyMock(t, 1, playerResp)
 	defer spotifyServer.Close()
-	handler.SetSpotifyAPIBaseURL(spotifyServer.URL)
-	handler.SetSpotifyHTTPClient(spotifyServer.Client())
+	configureSpotifyMock(handler, spotifyServer)
 
 	// Drain broadcast to avoid blocking
 	go func() {
@@ -631,7 +788,7 @@ func TestGetParticipantMe_AfterSyncStart_ReturnsSyncedState(t *testing.T) {
 	userID := "test-user-456"
 	now := time.Now()
 	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
-	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now})
+	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
 
 	encryptionKey := "12345678901234567890123456789012"
 	encryptedRefresh, _ := spotify.EncryptForTest("test-refresh-token", encryptionKey)
@@ -643,22 +800,19 @@ func TestGetParticipantMe_AfterSyncStart_ReturnsSyncedState(t *testing.T) {
 		Scope:                 "user-read-playback-state",
 	})
 
-	spotifyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"item": map[string]interface{}{
-				"id":          "track_123",
-				"name":        "Test Song",
-				"duration_ms": 200000,
-				"artists":     []map[string]interface{}{{"name": "Test Artist"}},
-			},
-			"is_playing":  true,
-			"progress_ms": 1000,
-		})
-	}))
+	playerResp := map[string]interface{}{
+		"item": map[string]interface{}{
+			"id":          "track_123",
+			"name":        "Test Song",
+			"duration_ms": 200000,
+			"artists":     []map[string]interface{}{{"name": "Test Artist"}},
+		},
+		"is_playing":  true,
+		"progress_ms": 1000,
+	}
+	spotifyServer := setupSpotifyMock(t, 1, playerResp)
 	defer spotifyServer.Close()
-	handler.SetSpotifyAPIBaseURL(spotifyServer.URL)
-	handler.SetSpotifyHTTPClient(spotifyServer.Client())
+	configureSpotifyMock(handler, spotifyServer)
 
 	// Drain broadcast to avoid blocking
 	go func() {

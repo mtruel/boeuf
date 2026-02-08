@@ -183,9 +183,10 @@ func (h *WebSocketHandler) sendInitialSnapshot(client *realtime.Client) error {
 
 		participantInfos[i] = realtime.ParticipantInfo{
 			UserID:           p.UserID,
+			DisplayName:      p.DisplayName,
 			Role:             p.Role,
 			SyncState:        p.SyncState,
-			LastSeenAt:       p.LastSeenAt.UTC().Format(time.RFC3339),
+			LastSeenAt:       time.Unix(p.LastSeenAt, 0).UTC().Format(time.RFC3339),
 			ConnectionStatus: status,
 		}
 	}

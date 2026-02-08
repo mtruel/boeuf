@@ -58,7 +58,8 @@ type TokenResponse struct {
 
 // UserInfoResponse represents Spotify's user info response
 type UserInfoResponse struct {
-	ID string `json:"id"`
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
 }
 
 // ExchangeResult contains the result of token exchange
@@ -108,10 +109,10 @@ func (s *TokenService) ExchangeCodeForTokens(ctx context.Context, code, codeVeri
 		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
 
-	// Get Spotify user ID
-	spotifyUserID, err := s.getUserID(ctx, tokenResp.AccessToken)
+	// Get user info (ID and display name)
+	spotifyUserID, displayName, err := s.getUserInfo(ctx, tokenResp.AccessToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user ID: %w", err)
+		return nil, fmt.Errorf("failed to get user info: %w", err)
 	}
 
 	// Encrypt refresh token
@@ -126,6 +127,7 @@ func (s *TokenService) ExchangeCodeForTokens(ctx context.Context, code, codeVeri
 	// Save to database
 	token := &models.SpotifyToken{
 		SpotifyUserID:         spotifyUserID,
+		DisplayName:           displayName,
 		AccessToken:           tokenResp.AccessToken,
 		RefreshTokenEncrypted: encryptedRefreshToken,
 		ExpiresAt:             expiresAt,
@@ -143,11 +145,11 @@ func (s *TokenService) ExchangeCodeForTokens(ctx context.Context, code, codeVeri
 	}, nil
 }
 
-// getUserID fetches the Spotify user ID using the access token
-func (s *TokenService) getUserID(ctx context.Context, accessToken string) (string, error) {
+// getUserInfo fetches the Spotify user ID and display name using the access token
+func (s *TokenService) getUserInfo(ctx context.Context, accessToken string) (string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.userInfoURL, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -155,18 +157,18 @@ func (s *TokenService) getUserID(ctx context.Context, accessToken string) (strin
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.New("failed to fetch user info from Spotify")
+		return "", "", errors.New("failed to fetch user info from Spotify")
 	}
 
 	var userInfo UserInfoResponse
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return userInfo.ID, nil
+	return userInfo.ID, userInfo.DisplayName, nil
 }

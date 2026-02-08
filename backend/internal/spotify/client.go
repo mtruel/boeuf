@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -34,6 +35,7 @@ type Client struct {
 	encryptionKey string
 	clientID      string
 	tokenURL      string
+	apiBaseURL    string
 }
 
 func NewClient(repo *repository.SpotifyTokenRepository, encryptionKey, clientID string) *Client {
@@ -42,11 +44,16 @@ func NewClient(repo *repository.SpotifyTokenRepository, encryptionKey, clientID 
 		encryptionKey: encryptionKey,
 		clientID:      clientID,
 		tokenURL:      DefaultTokenURL,
+		apiBaseURL:    spotifyAPIBase,
 	}
 }
 
 func (c *Client) SetTokenURL(url string) {
 	c.tokenURL = url
+}
+
+func (c *Client) SetAPIBaseURL(url string) {
+	c.apiBaseURL = url
 }
 
 // GetValidToken returns a valid access token, refreshing if necessary
@@ -218,7 +225,7 @@ func (c *Client) GetPlayerState(ctx context.Context, spotifyUserID string) (*Pla
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", spotifyAPIBase+"/me/player", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", c.apiBaseURL+"/me/player", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create player state request: %w", err)
 	}
@@ -302,6 +309,62 @@ func (c *Client) GetPlayerState(ctx context.Context, spotifyUserID string) (*Pla
 	return state, nil
 }
 
+// Device represents a Spotify playback device
+type Device struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	IsActive bool   `json:"is_active"`
+}
+
+// GetAvailableDevices retrieves the list of available Spotify devices
+func (c *Client) GetAvailableDevices(ctx context.Context, spotifyUserID string) ([]Device, error) {
+	accessToken, err := c.GetValidToken(ctx, spotifyUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", c.apiBaseURL+"/me/player/devices", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create devices request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("devices request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if resp.StatusCode == http.StatusTooManyRequests {
+		retryAfter := 1
+		if h := resp.Header.Get("Retry-After"); h != "" {
+			if n, _ := strconv.Atoi(h); n > 0 {
+				retryAfter = n
+			}
+		}
+		return nil, &RateLimitedError{RetryAfterSeconds: retryAfter}
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("spotify devices error %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	var devicesResp struct {
+		Devices []Device `json:"devices"`
+	}
+	if err := json.Unmarshal(body, &devicesResp); err != nil {
+		return nil, fmt.Errorf("failed to parse devices response: %w", err)
+	}
+
+	return devicesResp.Devices, nil
+}
+
 // Pause pauses playback on the user's active device
 func (c *Client) Pause(ctx context.Context, spotifyUserID string) error {
 	return c.playerCommand(ctx, spotifyUserID, "PUT", "/me/player/pause", nil)
@@ -330,7 +393,7 @@ func (c *Client) playerCommand(ctx context.Context, spotifyUserID, method, endpo
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, spotifyAPIBase+endpoint, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.apiBaseURL+endpoint, body)
 	if err != nil {
 		return fmt.Errorf("failed to create player command request: %w", err)
 	}
@@ -355,22 +418,32 @@ func (c *Client) playerCommand(ctx context.Context, spotifyUserID, method, endpo
 				retryAfter = n
 			}
 		}
+		log.Printf("Spotify player command rate limited endpoint=%s retryAfter=%d", endpoint, retryAfter)
 		return &RateLimitedError{RetryAfterSeconds: retryAfter}
 	}
 
-	// Success cases: 204 No Content or 202 Accepted
-	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusAccepted {
+	// Success cases: accept any 2xx response
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		respBodyStr := strings.TrimSpace(string(respBody))
+		if respBodyStr != "" {
+			log.Printf("Spotify player command returned status=%d endpoint=%s body=%s", resp.StatusCode, endpoint, respBodyStr)
+		}
 		return nil
 	}
 
 	// Handle specific errors
 	respBody, _ := io.ReadAll(resp.Body)
 	respBodyStr := string(respBody)
+	log.Printf("Spotify player command failed endpoint=%s status=%d body=%s", endpoint, resp.StatusCode, respBodyStr)
 
 	switch resp.StatusCode {
 	case http.StatusNotFound:
 		return errors.New("SPOTIFY_NO_DEVICE")
 	case http.StatusForbidden:
+		if isRestrictionViolation(respBody) || strings.Contains(strings.ToLower(respBodyStr), "restriction violated") {
+			return errors.New("SPOTIFY_RESTRICTION")
+		}
 		return errors.New("SPOTIFY_FORBIDDEN")
 	case http.StatusBadGateway, http.StatusServiceUnavailable:
 		// Check if it's a "No active device" error
@@ -381,4 +454,25 @@ func (c *Client) playerCommand(ctx context.Context, spotifyUserID, method, endpo
 	default:
 		return fmt.Errorf("SPOTIFY_UNAVAILABLE: %d %s", resp.StatusCode, respBodyStr)
 	}
+}
+
+func isRestrictionViolation(respBody []byte) bool {
+	var payload struct {
+		Error struct {
+			Message string `json:"message"`
+			Reason  string `json:"reason"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(respBody, &payload); err != nil {
+		return false
+	}
+
+	message := strings.ToLower(payload.Error.Message)
+	if strings.Contains(message, "restriction violated") {
+		return true
+	}
+
+	reason := strings.ToLower(payload.Error.Reason)
+	return strings.Contains(reason, "restriction")
 }

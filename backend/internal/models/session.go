@@ -47,12 +47,13 @@ func (SessionInvite) TableName() string {
 
 // SessionParticipant represents a participant in a session
 type SessionParticipant struct {
-	SessionID  string    `gorm:"primaryKey;type:text"`
-	UserID     string    `gorm:"primaryKey;type:text"`
-	JoinedAt   time.Time `gorm:"not null"`
-	Role       string    `gorm:"not null"`
-	LastSeenAt time.Time `gorm:"not null"`
-	SyncState  string    `gorm:"not null;default:'ready'"` // "ready" or "synced"
+	SessionID   string    `gorm:"primaryKey;type:text"`
+	UserID      string    `gorm:"primaryKey;type:text"`
+	DisplayName string    `gorm:"not null"` // Spotify user display name
+	JoinedAt    time.Time `gorm:"not null"`
+	Role        string    `gorm:"not null"`
+	LastSeenAt  int64     `gorm:"not null;type:integer"` // Unix timestamp in seconds
+	SyncState   string    `gorm:"not null;default:'ready'"` // "ready" or "synced"
 
 	// GORM relation (optional, for future use)
 	Session Session `gorm:"foreignKey:SessionID;references:ID"`

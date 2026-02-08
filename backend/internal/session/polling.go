@@ -178,9 +178,10 @@ func (p *PlayerPoller) pollOnce(sessionID string) {
 // hasActiveSyncedParticipants checks if session has any active synced participants
 func (p *PlayerPoller) hasActiveSyncedParticipants(sessionID string) bool {
 	var count int64
+	thresholdTime := time.Now().Add(-30 * time.Second).Unix()
 	err := p.db.Model(&models.SessionParticipant{}).
 		Where("session_id = ? AND sync_state = ? AND last_seen_at > ?",
-			sessionID, "synced", time.Now().Add(-30*time.Second)).
+			sessionID, "synced", thresholdTime).
 		Count(&count).Error
 
 	if err != nil {
@@ -194,8 +195,9 @@ func (p *PlayerPoller) hasActiveSyncedParticipants(sessionID string) bool {
 // getActiveSyncedParticipant returns an active synced participant for the session
 func (p *PlayerPoller) getActiveSyncedParticipant(sessionID string) *models.SessionParticipant {
 	var participant models.SessionParticipant
+	thresholdTime := time.Now().Add(-30 * time.Second).Unix()
 	err := p.db.Where("session_id = ? AND sync_state = ? AND last_seen_at > ?",
-		sessionID, "synced", time.Now().Add(-30*time.Second)).
+		sessionID, "synced", thresholdTime).
 		Order("last_seen_at DESC").
 		First(&participant).Error
 

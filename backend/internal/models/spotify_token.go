@@ -8,6 +8,7 @@ import (
 type SpotifyToken struct {
 	ID                    uint      `gorm:"primaryKey"`
 	SpotifyUserID         string    `gorm:"uniqueIndex;not null"`
+	DisplayName           string    `gorm:"not null"` // Spotify user display name
 	AccessToken           string    `gorm:"not null"`
 	RefreshTokenEncrypted string    `gorm:"not null"`
 	ExpiresAt             time.Time `gorm:"not null"`

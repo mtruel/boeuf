@@ -33,6 +33,21 @@ func setupPlayerTest() (*gorm.DB, *PlayerHandler, *sessions.CookieStore, *realti
 
 	handler := NewPlayerHandler(store, db, spotifyClient, hub)
 
+	// Insert test Spotify tokens for common test users
+	testTokens := []models.SpotifyToken{
+		{
+			SpotifyUserID:         "test-user-456",
+			DisplayName:           "Test User",
+			AccessToken:           "test-access-token",
+			RefreshTokenEncrypted: "test-refresh-token",
+			ExpiresAt:             time.Now().Add(1 * time.Hour),
+			Scope:                 "user-read-playback-state user-modify-playback-state",
+		},
+	}
+	for _, token := range testTokens {
+		db.Create(&token)
+	}
+
 	return db, handler, store, hub
 }
 
@@ -56,7 +71,7 @@ func TestPausePlayer_RequiresSyncedState(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "ready", // Not synced yet
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Create request
@@ -120,7 +135,7 @@ func TestSeekPlayer_RequiresPositionMs(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "synced",
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Request without positionMs
@@ -163,7 +178,7 @@ func TestSeekPlayer_NegativePosition(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "synced",
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Request with negative positionMs
@@ -305,7 +320,7 @@ func TestSeekPlayer_RejectIfPositionExceedsDuration(t *testing.T) {
 		Role:       "participant",
 		SyncState:  "synced", // Synced state
 		JoinedAt:   now,
-		LastSeenAt: now,
+		LastSeenAt: now.Unix(),
 	})
 
 	// Mock Spotify token for user
