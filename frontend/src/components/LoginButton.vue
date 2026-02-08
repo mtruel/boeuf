@@ -1,7 +1,28 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
+
+interface Props {
+  returnTo?: string
+}
+
+const props = defineProps<Props>()
+const route = useRoute()
+
 const handleLogin = () => {
-  // Redirect to backend OAuth start endpoint
-  window.location.href = '/auth/spotify/start'
+  // Determine return URL: explicit prop, current route, or none
+  const returnUrl = props.returnTo || route.fullPath
+  
+  // Redirect to backend OAuth start endpoint with return_to parameter
+  const params = new URLSearchParams()
+  if (returnUrl && returnUrl !== '/') {
+    params.append('return_to', returnUrl)
+  }
+  
+  const url = params.toString() 
+    ? `/auth/spotify/start?${params.toString()}`
+    : '/auth/spotify/start'
+  
+  window.location.href = url
 }
 </script>
 

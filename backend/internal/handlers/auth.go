@@ -67,6 +67,11 @@ func (h *SpotifyAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 	sess.Values["state"] = state
 	sess.Values["code_verifier"] = codeVerifier
 
+	// Store return_to URL if provided (for post-OAuth redirect)
+	if returnTo := r.URL.Query().Get("return_to"); returnTo != "" {
+		sess.Values["return_to"] = returnTo
+	}
+
 	err = sess.Save(r, w)
 	if err != nil {
 		log.Printf("ERROR: Failed to save session: %v", err)
@@ -150,10 +155,19 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Clean up session PKCE data
 	delete(sess.Values, "state")
 	delete(sess.Values, "code_verifier")
+
+	// Get return_to URL from session (if set during Start)
+	returnTo, _ := sess.Values["return_to"].(string)
+	delete(sess.Values, "return_to") // Clean up after reading
+
 	sess.Save(r, w)
 
-	// Redirect to frontend
-	http.Redirect(w, r, "/", http.StatusFound)
+	// Redirect to frontend - use return_to if present, otherwise default to /
+	redirectURL := "/"
+	if returnTo != "" {
+		redirectURL = returnTo
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // Logout clears the Spotify authentication from the session

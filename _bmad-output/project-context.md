@@ -73,7 +73,11 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 ### Testing Rules
 
 - Frontend: Vitest; tests co-localisés quand possible.
+- **Important:** Toujours lancer les tests frontend en mode `--run` (non-watch) : `npm run test:unit -- --run`
+  - Éviter le mode watch qui bloque le terminal et nécessite intervention manuelle (appuyer sur 'q')
+  - Pour les agents IA : utiliser systématiquement `--run` pour éviter les processus bloquants
 - Backend: ajouter des tests ciblés sur le protocole (ordre/idempotence/resync) et sur la logique rate-limit.
+- Backend: `go test ./...` est déjà en mode one-shot (pas de watch par défaut)
 
 ### Code Quality & Style Rules
 
@@ -169,7 +173,7 @@ Pour réduire la friction, utilisez le `Makefile` à la racine pour toutes les o
 | `make dev-restart` | **Agent Friendly**. Rebuild et démarre les conteneurs en background. Utile pour appliquer des changements. | Développement |
 | `make test` | Lance tous les tests (Back + Front) dans Docker. | CI / Check |
 | `make test-backend` | Tests Go uniquement (`go test ./...`). | Backend |
-| `make test-frontend` | Tests Vue uniquement (`npm run test:unit`). | Frontend |
+| `make test-frontend` | Tests Vue uniquement (`npm run test:unit -- --run`). | Frontend |
 | `make prod` | Lance l'environnement en mode production (build optimisé). | Staging |
 | `make logs` | Affiche un snapshot des logs (non bloquant). | Debug Agent |
 | `make watch-logs` | Affiche les logs en continu (bloquant). | Debug Humain |

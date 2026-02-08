@@ -231,6 +231,141 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// JoinSessionRequest represents the request body for joining a session
+type JoinSessionRequest struct {
+	InviteToken string `json:"inviteToken"`
+}
+
+// JoinSessionResponse represents the response for successfully joining a session
+type JoinSessionResponse struct {
+	SessionID string `json:"sessionId"`
+}
+
+// Join allows a user to join a session using an invite token
+func (h *SessionHandler) Join(w http.ResponseWriter, r *http.Request) {
+	// Validate HTTP method
+	if r.Method != http.MethodPost {
+		h.sendErrorResponse(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST method is allowed")
+		return
+	}
+
+	// Validate authentication
+	session, err := h.store.Get(r, "boeuf-session")
+	if err != nil {
+		log.Printf("ERROR: Failed to get session: %v", err)
+		h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to access session")
+		return
+	}
+
+	userID, ok := session.Values["spotify_user_id"].(string)
+	if !ok || userID == "" {
+		h.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHENTICATED", "Authentication required")
+		return
+	}
+
+	// Limit request body size to 1KB (invite tokens are small)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+
+	// Parse request body
+	var req JoinSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	if req.InviteToken == "" {
+		h.sendErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "inviteToken is required")
+		return
+	}
+
+	// Hash the provided token to match against stored hash
+	hash := sha256.Sum256([]byte(req.InviteToken))
+	tokenHash := base64.URLEncoding.EncodeToString(hash[:])
+
+	// Find the invite by token hash
+	var invite models.SessionInvite
+	err = h.db.Where("token_hash = ?", tokenHash).First(&invite).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			h.sendErrorResponse(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Invalid or expired invitation")
+		} else {
+			log.Printf("ERROR: Failed to lookup invite: %v", err)
+			h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to lookup invitation")
+		}
+		return
+	}
+
+	// Check if invite is expired
+	if time.Now().After(invite.ExpiresAt) {
+		h.sendErrorResponse(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Invalid or expired invitation")
+		return
+	}
+
+	// Verify session exists and is active
+	var sessionModel models.Session
+	err = h.db.Where("id = ?", invite.SessionID).First(&sessionModel).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			h.sendErrorResponse(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session not found")
+		} else {
+			log.Printf("ERROR: Failed to lookup session: %v", err)
+			h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to lookup session")
+		}
+		return
+	}
+
+	// Check if session is expired or inactive
+	if !sessionModel.Active || time.Now().After(sessionModel.ExpiresAt) {
+		h.sendErrorResponse(w, http.StatusNotFound, "SESSION_NOT_FOUND", "Session is no longer active")
+		return
+	}
+
+	// Check if user is already a participant (idempotent operation)
+	var existingParticipant models.SessionParticipant
+	err = h.db.Where("session_id = ? AND user_id = ?", invite.SessionID, userID).First(&existingParticipant).Error
+	
+	now := time.Now()
+	
+	if err == gorm.ErrRecordNotFound {
+		// Create new participant
+		participant := models.SessionParticipant{
+			SessionID:  invite.SessionID,
+			UserID:     userID,
+			JoinedAt:   now,
+			Role:       "participant",
+			LastSeenAt: now,
+		}
+
+		if err := h.db.Create(&participant).Error; err != nil {
+			log.Printf("ERROR: Failed to create participant: %v", err)
+			h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to join session")
+			return
+		}
+	} else if err != nil {
+		log.Printf("ERROR: Failed to check existing participant: %v", err)
+		h.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to check participation status")
+		return
+	} else {
+		// Update last_seen_at for existing participant (idempotent)
+		existingParticipant.LastSeenAt = now
+		if err := h.db.Save(&existingParticipant).Error; err != nil {
+			log.Printf("WARNING: Failed to update participant last_seen_at: %v", err)
+			// Don't fail the request - this is just a timestamp update
+		}
+	}
+
+	// Return success response
+	response := JoinSessionResponse{
+		SessionID: invite.SessionID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("ERROR: Failed to encode response: %v", err)
+	}
+}
+
 // sendErrorResponse sends a standardized error response
 func (h *SessionHandler) sendErrorResponse(w http.ResponseWriter, statusCode int, code, message string) {
 	response := map[string]interface{}{
