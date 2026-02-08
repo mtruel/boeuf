@@ -32,6 +32,7 @@ Contexte produit : web app temps réel (Vue SPA + Go backend) orchestrant Spotif
 
 - PASS si : on a un mode `SPOTIFY_MODE=mock|record|live`, avec un fake player contrôlable.
 - CONCERNS tant que : les tests d’intégration dépendent d’un état Spotify réel non contrôlable.
+**[CR 1-7 Finding]** Problème détecté : tests d'intégration ne couvrent pas l'**initialisation du player state** sur charge page. Les contrôles sont désactivés faute de données initiales (GET endpoint manquant). Cela a échappé aux tests car seuls les POST endpoints (pause/resume/next/seek) étaient testés.
 
 ### Observability — **CONCERNS → PASS si instrumentation minimale**
 
@@ -45,6 +46,7 @@ Contexte produit : web app temps réel (Vue SPA + Go backend) orchestrant Spotif
 
 - PASS si : `/health` + métriques + logs corrélables existent dès Sprint 0.
 - CONCERNS si : pas de moyens automatiques pour attribuer un bug “Spotify vs WS vs UI”.
+**[CR 1-7 Finding]** Le problème d'initialisation n'a pas été détecté car l'observabilité sur le **frontend store state** est faible. Manque : logs de l'initialisation de `playerStore`, trace de l'appel GET endpoint, validation que `track !== null` après init.
 
 ### Reliability (tests isolation / reproductibilité) — **CONCERNS**
 
@@ -96,6 +98,9 @@ ASR = exigences (souvent NFR) qui structurent l’architecture et doivent être 
 | R-010 | BUS | UX “Airlock” mal appliqué → autoplay bloqué / confusion | 2 | 2 | 4 | Tests E2E sur flow “Start Listening” + états audio | QA |
 | R-011 | OPS | Expiration sessions 24h non appliquée → DB gonfle | 2 | 2 | 4 | Job cleanup + tests d’expiration + métriques | Dev/Ops |
 | R-012 | REL | Détection déconnexion >5s → host failover tardif | 2 | 3 | 6 | Tests heartbeat/timeout + métriques de déconnexion | Dev/QA |
+| R-013 | ARCH | **[CR 1-7] Player state init missing** → controls non-functional on load | 3 | 3 | 9 | **BLOCKER** : Ajouter GET endpoint `/player/state` + appeler depuis `playerStore.init()` | Dev |
+| R-014 | ARCH | Seek validation incomplet → AC#4 violation | 2 | 3 | 6 | Valider `positionMs ≤ track.durationMs` avant appel Spotify | Dev |
+| R-015 | PERF | **[CR 1-7] IdempotenceCache lock contention** → latence spikes | 3 | 2 | 6 | Remplacer cleanup périodique par lazy deletion (risk ≤3s SLA) | Dev |
 
 ---
 
@@ -104,8 +109,11 @@ ASR = exigences (souvent NFR) qui structurent l’architecture et doivent être 
 ### Recommandation de split
 
 - **Unit : 55%** — logique pure (event ordering, idempotence, backoff/jitter, règles host/conflits, chiffrement)
+  - **[CR 1-7]** Ajouter tests : seek position validation (`positionMs ≤ durationMs`), GetPlayerState avec Item==nil (edge case), IdempotenceCache cleanup performance.
 - **Integration/API : 35%** — Go handlers + DB (SQLite) + hub WS (multi-clients), sans navigateur
+  - **Gap trouvé [CR 1-7]** : Tests couvrent les actions (pause/resume/next/seek POST), mais pas l'initialisation (GET /player/state absent). Ajouter : test du flow "charge page → appel GET → playerStore init avec state".
 - **E2E : 10%** — flux critiques UI (create/join session, airlock, présence, reconnect basique)
+  - **[CR 1-7]** Ajouter test : "join session → PlayerControls buttons enabled" (dépend de GET /player/state)
 
 **Rationale** : le cœur de boeuf est protocolaire/temps réel. Maximiser les tests hors navigateur limite la flakiness et accélère le feedback.
 
@@ -178,13 +186,13 @@ Automatisation (exemples)
 
 - Pas d’abstraction Spotify → tests d’intégration instables (dépendance live).
 - Pas de mécanisme de reset DB/hub → tests non parallélisables.
-- Pas de corrélation (`trace_id`) → debug lent.
+- Pas de corrélation (`trace_id`) → debug lent.- **[CR 1-7]** Pas de couverture d'initialisation frontend → features non-functional on first load passent les tests.
 
 ### Concerns actuels (à résoudre Sprint 0)
 
 - Définir un mode **mock/record/live** pour Spotify.
 - Définir un **contrat WS minimal** (types, enveloppe, codes d’erreur) et le centraliser.
-- Décider l’outil E2E (Playwright recommandé pour TS; Cypress aussi viable) et poser la structure.
+- Décider l’outil E2E (Playwright recommandé pour TS; Cypress aussi viable) et poser la structure.- **[CR 1-7 - URGENT]** : Couvrir les flux d'initialisation frontend (GET endpoints pour state init, store setup, UI readiness). Gap critique : tests unitaires/intégration sur backend POST controllers seul, sans vérifier que frontend peut utiliser le player.
 
 ---
 

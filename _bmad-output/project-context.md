@@ -73,7 +73,7 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 ### Testing Rules
 
 - Frontend: Vitest; tests co-localisés quand possible.
-- **Important:** Toujours lancer les tests frontend en mode `--run` (non-watch) : `npm run test:unit -- --run`
+ - **Important:** Toujours lancer les tests frontend en mode `--run` (non-watch) : `npm run test:unit -- --run`
   - Éviter le mode watch qui bloque le terminal et nécessite intervention manuelle (appuyer sur 'q')
   - Pour les agents IA : utiliser systématiquement `--run` pour éviter les processus bloquants
 - Backend: ajouter des tests ciblés sur le protocole (ordre/idempotence/resync) et sur la logique rate-limit.
@@ -130,6 +130,67 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 
 - E2E tests Playwright pointent vers `localhost:3000` (stack Docker complet)
 - Vite dev proxy `/auth` et `/api` vers backend pour dev local (si besoin)
+
+## Testing & Debugging Strategy
+
+### Chrome + Spotify Web Testing
+
+**CRITICAL:** Toujours utiliser `http://127.0.0.1:3000` (PAS `localhost:3000`) - évite les problèmes de session state.
+
+**Setup Flow:**
+
+1. Spotify Web Player ouvert et actif dans onglet séparé
+2. Navigate to `http://127.0.0.1:3000` → OAuth → Créer session
+3. "Démarrer l'écoute" → état synced
+4. Attendre 3-5s pour initialisation complète
+
+**Chrome DevTools Inspection:**
+
+```javascript
+// Check stores initialized (Console)
+// Look for: "🍍 'player' store installed 🆕"
+
+// Check button state
+Array.from(document.querySelectorAll('button')).map(b => ({
+  text: b.textContent.trim(), 
+  disabled: b.disabled
+}))
+
+// Network tab: Filter XHR/Fetch
+// Critical calls: GET /player/state, POST /player/pause
+// WebSocket: WS tab shows real-time PLAYER_* events
+```
+
+**Common Issues:**
+
+- **Buttons Disabled:** `playerStore.track` null → Missing `GET /player/state` initial fetch
+- **503 on Commands:** Spotify device inactive → Backend returns `SPOTIFY_NO_ACTIVE_DEVICE`
+- **WebSocket Not Connected:** Check Network tab for "101 Switching Protocols"
+
+**Investigation Checklist:**
+
+- [ ] Using `127.0.0.1:3000` (not localhost)?
+- [ ] Stores initialized? (console logs)
+- [ ] WebSocket connected? (Network WS tab)
+- [ ] Player has track data? (buttons enabled?)
+- [ ] Spotify Web player active in other tab?
+- [ ] User in "Synced" state?
+
+**Testing Commands:**
+
+```bash
+# Full test suite
+make test
+
+# Backend only
+make test-backend
+
+# Frontend only (--run mode to avoid watch blocking)
+make test-frontend
+
+# Monitor logs
+make logs
+```
 
 ## Defaults & Anti-Patterns
 

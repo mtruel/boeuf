@@ -47,8 +47,9 @@ development_status:
   1-4-rejoindre-une-session-via-lien-code-avec-controle-dacces: done
   1-5-websocket-session-presence-participants-etat-connexion: done
   1-6-sas-start-listening-anti-autoplay-et-etat-ready-synced: done
-  1-7-synchronisation-play-pause-evenements-ordonnes-idempotence: ready-for-dev
+  1-7-synchronisation-play-pause-evenements-ordonnes-idempotence: done
   1-8-afficher-now-playing-morceau-artiste-progression-mise-a-jour-temps-reel: ready-for-dev
+  1-9-auth-error-handling-polish-bug-fixes: ready-for-dev
   epic-1-retrospective: optional
 
   epic-2: backlog

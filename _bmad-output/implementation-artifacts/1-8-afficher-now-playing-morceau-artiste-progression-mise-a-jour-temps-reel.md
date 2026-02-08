@@ -74,25 +74,51 @@ So that je sache ce que le groupe écoute.
      - Format paused: `⏸ Paused`
    - **And** le favicon affiche un badge vert quand la session est "Live/Synced"
 
+8. **Fix: Progression temps réel automatique (BUG #5)**
+   - **Given** une session active avec lecture en cours (`isPlaying === true`)
+   - **When** l'utilisateur observe le player pendant plusieurs secondes
+   - **Then** la position actuelle (`currentTime`) DOIT s'incrémenter automatiquement chaque seconde
+   - **And** l'interpolation locale DOIT être implémentée côté client (pas uniquement polling serveur)
+   - **And** le slider de progression DOIT refléter visuellement l'avancement en temps réel
+   - **And** le formatage du temps affiché (mm:ss) DOIT se mettre à jour continuellement
+   - **Validation**: Observer la progression pendant 10 secondes → `currentTime` doit passer de 4:11 à 4:21
+
+9. **Fix: Sync métadonnées lors de changements de track (BUG #6)**
+   - **Given** un utilisateur change de track directement dans Spotify Web Player
+   - **When** le backend détecte le changement via polling Spotify API
+   - **Then** un événement WebSocket `TRACK_CHANGED` DOIT être envoyé avec les nouvelles métadonnées complètes:
+     - `trackId`, `trackName`, `artist`, `albumArt`, `durationMs`
+   - **And** le frontend DOIT mettre à jour immédiatement toutes les informations affichées:
+     - Titre du morceau
+     - Nom de l'artiste
+     - Pochette de l'album
+     - Durée totale du morceau
+     - Position réinitialisée à 0
+   - **And** les métadonnées du slider DOIT être mises à jour (`valuemax` = nouvelle `durationMs`)
+   - **And** toute tentative de seek DOIT utiliser les métadonnées à jour
+   - **Validation**: Backend DOIT rejeter toute requête seek où `positionMs > durationMs` actuelle
+   - **Validation**: Changer de track dans Spotify → observer dans Boeuf sous 5-10s (délai polling)
+
 ## Tasks / Subtasks
 
-- [ ] Backend: Polling régulier état Spotify player (AC: 2, 5)
+- [ ] Backend: Polling régulier état Spotify player (AC: 2, 5, 8, 9)
   - [ ] Job/goroutine périodique par session active (ex: toutes les 5-10s)
   - [ ] Appeler Spotify GET `/me/player` pour tous les participants "synced"
   - [ ] Détecter changements d'état: track, position, isPlaying, device
+  - [ ] **CRITICAL (AC 9):** Comparer `trackId` pour détecter changement de track
   - [ ] Broadcaster événements WS uniquement si changement détecté (éviter spam)
   - [ ] Gestion rate limiting Spotify (backoff si 429)
   - [ ] Stop polling si tous les participants sont déconnectés ou session inactive
 
-- [ ] Backend: Événements WebSocket état player (AC: 1, 2, 3, 4, 5)
+- [ ] Backend: Événements WebSocket état player (AC: 1, 2, 3, 4, 5, 8, 9)
   - [ ] Événement `PLAYER_STATE_UPDATE` avec payload complet:
     - `trackId`, `trackName`, `artist`, `albumArt` (URL)
     - `isPlaying` (boolean)
     - `positionMs` (number)
     - `durationMs` (number)
     - `timestamp` (RFC3339 UTC)
-  - [ ] Broadcast régulier (via polling) pour sync position
-  - [ ] Événement déjà existant `TRACK_CHANGED` enrichi avec mêmes infos
+  - [ ] Broadcast régulier (via polling) pour sync position (AC 8)
+  - [ ] **CRITICAL (AC 9):** Événement `TRACK_CHANGED` enrichi avec métadonnées complètes lors de changement de `trackId`
   - [ ] Réutiliser événements `PLAYER_PAUSED`/`PLAYER_RESUMED` de Story 1.7
 
 - [ ] Backend: Enrichissement snapshot initial (AC: 1)
@@ -100,24 +126,26 @@ So that je sache ce que le groupe écoute.
   - [ ] Inclure même structure que `PLAYER_STATE_UPDATE`
   - [ ] Gérer cas où aucun morceau n'est actif (null/empty)
 
-- [ ] Frontend: Store player state (AC: 1, 2, 3, 4, 5)
+- [ ] Frontend: Store player state (AC: 1, 2, 3, 4, 5, 8, 9)
   - [ ] Étendre `usePlayerStore` (ou créer si absent) avec:
     - `currentTrack`: `{ id, name, artist, albumArt, durationMs }`
     - `isPlaying`: boolean
     - `positionMs`: number (position serveur)
     - `lastUpdateAt`: timestamp (pour interpolation locale)
   - [ ] Action `updatePlayerState(payload)` appelée lors des événements WS
+  - [ ] **CRITICAL (AC 9):** Action `updateTrackMetadata(track)` pour changements de track
   - [ ] Computed `progressPercent`: calculé depuis position/duration
   - [ ] Computed `positionFormatted` et `durationFormatted` (mm:ss)
 
-- [ ] Frontend: Interpolation locale progression (AC: 2, 5)
-  - [ ] Composable `usePlayerProgress()` qui:
+- [ ] Frontend: Interpolation locale progression (AC: 2, 5, 8)
+  - [ ] **CRITICAL (AC 8):** Composable `usePlayerProgress()` qui:
     - Lit `positionMs` et `lastUpdateAt` du store
     - Calcule position locale interpolée via `requestAnimationFrame` ou interval
-    - Incrémente position si `isPlaying === true`
+    - **Incrémente automatiquement position chaque seconde si `isPlaying === true`**
     - Recalibre si écart serveur > seuil (2s)
   - [ ] Retourne `currentPositionMs` réactif pour l'UI
   - [ ] Gère pause: fige l'interpolation
+  - [ ] **Test validation:** Observer progression pendant 10s → temps avance automatiquement
   - [ ] Cleanup lors du unmount
 
 - [ ] Frontend: Composant `MusicPlayerDisplay.vue` (AC: 1, 2, 6)
@@ -141,12 +169,13 @@ So that je sache ce que le groupe écoute.
   - [ ] Utiliser Shadcn `Progress` comme base
   - [ ] Animations fluides (CSS transitions)
 
-- [ ] Frontend: Gestion événements WebSocket (AC: 3, 4, 5)
+- [ ] Frontend: Gestion événements WebSocket (AC: 3, 4, 5, 9)
   - [ ] Écouter `PLAYER_STATE_UPDATE` → `updatePlayerState()`
-  - [ ] Écouter `TRACK_CHANGED` → `updatePlayerState()` + trigger transition
+  - [ ] **CRITICAL (AC 9):** Écouter `TRACK_CHANGED` → `updateTrackMetadata()` + trigger transition
   - [ ] Écouter `PLAYER_PAUSED` → set `isPlaying = false`
   - [ ] Écouter `PLAYER_RESUMED` → set `isPlaying = true`
-  - [ ] Détecter changement de track (différent `trackId`) → déclencher cross-fade
+  - [ ] **CRITICAL (AC 9):** Détecter changement de track (différent `trackId`) → déclencher cross-fade + reset position
+  - [ ] **Validation (AC 9):** Update slider `valuemax` avec nouvelle `durationMs`
 
 - [ ] Frontend: Transition visuelle changement track (AC: 3)
   - [ ] Cross-fade pochette (300ms selon UX spec)
@@ -178,17 +207,22 @@ So that je sache ce que le groupe écoute.
 - [ ] Tests Backend (AC: tous)
   - [ ] Test job polling: appelle Spotify GET `/me/player` régulièrement
   - [ ] Test détection changement: broadcast si track/position/état change
+  - [ ] **CRITICAL (AC 9):** Test détection changement de `trackId` → broadcast `TRACK_CHANGED` avec metadata complètes
   - [ ] Test pas de broadcast si aucun changement (éviter spam WS)
   - [ ] Test format événement `PLAYER_STATE_UPDATE` (tous champs requis)
   - [ ] Test timestamps en RFC3339 UTC
   - [ ] Test snapshot initial contient état now playing
   - [ ] Test gestion 429 rate limit Spotify (backoff)
   - [ ] Test stop polling si session inactive
+  - [ ] **CRITICAL (AC 9):** Test validation seek: reject si `positionMs > durationMs`
 
 - [ ] Tests Frontend (AC: tous)
   - [ ] Test affichage Now Playing avec données complètes
-  - [ ] Test interpolation locale progression (position avance si playing)
+  - [ ] **CRITICAL (AC 8):** Test interpolation locale progression automatique (observer 10s → temps avance)
+  - [ ] **CRITICAL (AC 8):** Test position s'incrémente chaque seconde quand `isPlaying === true`
   - [ ] Test recalibration si écart serveur > seuil
+  - [ ] **CRITICAL (AC 9):** Test changement track → métadonnées mises à jour (titre, artiste, artwork, duration)
+  - [ ] **CRITICAL (AC 9):** Test slider `valuemax` updated avec nouvelle `durationMs`
   - [ ] Test transition track: cross-fade + update métadonnées
   - [ ] Test états visuels Empty/Loading/Playing/Paused
   - [ ] Test update titre tab dynamiquement
