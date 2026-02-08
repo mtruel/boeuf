@@ -54,8 +54,8 @@ func (h *AuthStatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	// User is authenticated
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"authenticated":   true,
-		"spotify_user_id": spotifyUserID,
+		"authenticated": true,
+		"spotifyUserId": spotifyUserID,
 	})
 }
 

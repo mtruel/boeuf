@@ -279,3 +279,24 @@ func (h *Hub) GetSessionClients(sessionID string) []*Client {
 	}
 	return result
 }
+
+// BroadcastToSession sends an event to all clients in a session
+func (h *Hub) BroadcastToSession(sessionID string, msgType MessageType, payload interface{}) error {
+	eventSeq := h.GetNextEventSeq(sessionID)
+	msg, err := NewMessage(msgType, sessionID, eventSeq, payload)
+	if err != nil {
+		return err
+	}
+
+	msgBytes, err := msg.Marshal()
+	if err != nil {
+		return err
+	}
+
+	h.Broadcast <- &BroadcastMessage{
+		SessionID: sessionID,
+		Message:   msgBytes,
+	}
+
+	return nil
+}

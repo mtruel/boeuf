@@ -10,6 +10,16 @@ type Session struct {
 	CreatedAt time.Time `gorm:"not null"`
 	ExpiresAt time.Time `gorm:"not null"`
 	Active    bool      `gorm:"not null;default:true"`
+
+	// Baseline playback state (optional). Used to show context to newcomers.
+	BaselineTrackID    string     `gorm:"type:text"`
+	BaselineTrackName  string     `gorm:"type:text"`
+	BaselineArtist     string     `gorm:"type:text"`
+	BaselineIsPlaying  bool       `gorm:"not null;default:false"`
+	BaselinePositionMs int64      `gorm:"not null;default:0"`
+	BaselineDurationMs int64      `gorm:"not null;default:0"`
+	BaselineImageURL   string     `gorm:"type:text"` // Album art URL
+	BaselineCapturedAt *time.Time `gorm:""`
 }
 
 // TableName overrides the table name used by GORM
@@ -25,7 +35,7 @@ type SessionInvite struct {
 	Code      string    `gorm:""`
 	ExpiresAt time.Time `gorm:"not null"`
 	CreatedAt time.Time `gorm:"not null"`
-	
+
 	// GORM relation (optional, for future use)
 	Session Session `gorm:"foreignKey:SessionID;references:ID"`
 }
@@ -42,7 +52,8 @@ type SessionParticipant struct {
 	JoinedAt   time.Time `gorm:"not null"`
 	Role       string    `gorm:"not null"`
 	LastSeenAt time.Time `gorm:"not null"`
-	
+	SyncState  string    `gorm:"not null;default:'ready'"` // "ready" or "synced"
+
 	// GORM relation (optional, for future use)
 	Session Session `gorm:"foreignKey:SessionID;references:ID"`
 }

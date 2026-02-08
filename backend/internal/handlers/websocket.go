@@ -1,6 +1,5 @@
 package handlers
 
-
 import (
 	"errors"
 	"log"
@@ -149,15 +148,31 @@ func (h *WebSocketHandler) sendInitialSnapshot(client *realtime.Client) error {
 		participantInfos[i] = realtime.ParticipantInfo{
 			UserID:           p.UserID,
 			Role:             p.Role,
+			SyncState:        p.SyncState,
 			LastSeenAt:       p.LastSeenAt.UTC().Format(time.RFC3339),
 			ConnectionStatus: status,
 		}
 	}
 
-	// Build snapshot payload (nowPlaying will be added in future stories)
+	// Best-effort: load baseline now playing from session.
+	var nowPlaying *realtime.NowPlayingInfo
+	var sess models.Session
+	if err := h.db.Where("id = ?", client.SessionID).First(&sess).Error; err == nil {
+		if sess.BaselineCapturedAt != nil && sess.BaselineTrackID != "" {
+			nowPlaying = &realtime.NowPlayingInfo{
+				TrackID:    sess.BaselineTrackID,
+				TrackName:  sess.BaselineTrackName,
+				Artist:     sess.BaselineArtist,
+				IsPlaying:  sess.BaselineIsPlaying,
+				PositionMs: sess.BaselinePositionMs,
+			}
+		}
+	}
+
+	// Build snapshot payload (nowPlaying is optional)
 	payload := realtime.SessionSnapshotPayload{
 		Participants: participantInfos,
-		NowPlaying:   nil, // Future: Story 1.8
+		NowPlaying:   nowPlaying,
 	}
 
 	// Create message with next event sequence

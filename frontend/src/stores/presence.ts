@@ -57,9 +57,10 @@ export const usePresenceStore = defineStore('presence', () => {
         // Listen for PARTICIPANT_LEFT
         unregisterHandlers.push(realtimeStore.onMessage('PARTICIPANT_LEFT', handleParticipantLeft))
 
-        initialized.value = true
+        // Listen for PARTICIPANT_SYNC_STATE_CHANGED
+        unregisterHandlers.push(realtimeStore.onMessage('PARTICIPANT_SYNC_STATE_CHANGED', handleSyncStateChanged))
 
-        console.log('[Presence] Initialized')
+        initialized.value = true
     }
 
     /**
@@ -67,8 +68,6 @@ export const usePresenceStore = defineStore('presence', () => {
      */
     function handleSnapshot(message: WSMessage) {
         const payload = message.payload as SessionSnapshotPayload
-
-        console.log('[Presence] Received snapshot with', payload.participants.length, 'participants')
 
         // Replace entire participant map with snapshot
         participants.value.clear()
@@ -83,8 +82,6 @@ export const usePresenceStore = defineStore('presence', () => {
     function handleParticipantJoined(message: WSMessage) {
         const payload = message.payload as ParticipantJoinedPayload
 
-        console.log('[Presence] Participant joined:', payload.userId)
-
         // Add or update participant
         const existing = participants.value.get(payload.userId)
         if (existing) {
@@ -96,6 +93,7 @@ export const usePresenceStore = defineStore('presence', () => {
             participants.value.set(payload.userId, {
                 userId: payload.userId,
                 role: payload.role,
+                syncState: 'ready', // Default to ready
                 connectionStatus: 'online',
                 lastSeenAt: payload.timestamp
             })
@@ -108,8 +106,6 @@ export const usePresenceStore = defineStore('presence', () => {
     function handleParticipantLeft(message: WSMessage) {
         const payload = message.payload as ParticipantLeftPayload
 
-        console.log('[Presence] Participant left:', payload.userId)
-
         // Update participant status to offline
         const participant = participants.value.get(payload.userId)
         if (participant) {
@@ -120,6 +116,20 @@ export const usePresenceStore = defineStore('presence', () => {
         // Note: We don't remove the participant from the list
         // They remain in the session but are marked offline
         // Future: Could remove after a timeout or on explicit leave
+    }
+
+    /**
+     * Handle PARTICIPANT_SYNC_STATE_CHANGED event
+     */
+    function handleSyncStateChanged(message: WSMessage) {
+        const payload = message.payload as { userId: string; syncState: string; timestamp: string }
+
+        // Update participant sync state
+        const participant = participants.value.get(payload.userId)
+        if (participant) {
+            participant.syncState = payload.syncState as 'ready' | 'synced'
+            participant.lastSeenAt = payload.timestamp
+        }
     }
 
     /**
@@ -141,7 +151,6 @@ export const usePresenceStore = defineStore('presence', () => {
      * Clear all participants (when leaving session)
      */
     function clear() {
-        console.log('[Presence] Clearing all participants')
         participants.value.clear()
 
         // Unregister WS handlers so next mount can re-initialize cleanly

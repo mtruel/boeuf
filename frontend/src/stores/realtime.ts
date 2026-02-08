@@ -14,6 +14,7 @@ export type MessageType =
     | 'SESSION_SNAPSHOT'
     | 'PARTICIPANT_JOINED'
     | 'PARTICIPANT_LEFT'
+    | 'PARTICIPANT_SYNC_STATE_CHANGED'
     | 'PLAYER_PAUSED'
     | 'PLAYER_RESUMED'
     | 'TRACK_CHANGED'
@@ -43,6 +44,7 @@ export interface SessionSnapshotPayload {
 export interface ParticipantInfo {
     userId: string
     role: 'host' | 'participant'
+    syncState: 'ready' | 'synced'
     lastSeenAt: string // RFC3339
     connectionStatus: 'online' | 'offline'
 }
@@ -100,7 +102,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
      */
     function connect(sid: string) {
         if (ws.value) {
-            console.warn('[Realtime] Already connected, disconnecting first')
             disconnect()
         }
 
@@ -112,13 +113,15 @@ export const useRealtimeStore = defineStore('realtime', () => {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         const wsUrl = `${protocol}//${window.location.host}/ws/${sid}`
 
-        console.log('[Realtime] Connecting to', wsUrl)
+        // Log only in development
+        if (import.meta.env.DEV) {
+            console.log('[Realtime] Connecting to', wsUrl)
+        }
 
         try {
             const socket = new WebSocket(wsUrl)
 
             socket.onopen = () => {
-                console.log('[Realtime] Connected')
                 connectionState.value = 'connected'
                 lastError.value = null
             }
@@ -139,13 +142,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
             }
 
             socket.onclose = (event) => {
-                console.log('[Realtime] Disconnected', event.code, event.reason)
                 connectionState.value = 'disconnected'
                 ws.value = null
 
                 // Future: automatic reconnection logic (Story 4.2)
                 if (!event.wasClean) {
-                    lastError.value = `Connection closed unexpectedly: ${event.reason || 'Unknown reason'}`
+                    lastError.value = `Connection closed unexpectedly: ${event.code}`
                 }
             }
 
@@ -162,7 +164,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
      */
     function disconnect() {
         if (ws.value) {
-            console.log('[Realtime] Disconnecting')
             ws.value.close(1000, 'Client initiated disconnect')
             ws.value = null
         }
@@ -176,15 +177,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
      * @param message Parsed WebSocket message
      */
     function handleMessage(message: WSMessage) {
-        console.log(`[Realtime] Received ${message.type}`, message)
+        // Check for out-of-order messages
+        if (lastEventSeq.value >= 0 && message.eventSeq <= lastEventSeq.value) {
+            console.warn(`[Realtime] Received out-of-order message: eventSeq=${message.eventSeq}, expected >${lastEventSeq.value}`)
+        }
 
         // Update last event sequence
         if (message.eventSeq > lastEventSeq.value) {
             lastEventSeq.value = message.eventSeq
-        } else {
-            console.warn(
-                `[Realtime] Received out-of-order message: seq=${message.eventSeq}, last=${lastEventSeq.value}`
-            )
         }
 
         // Dispatch to registered handlers
@@ -197,8 +197,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
                     console.error(`[Realtime] Handler error for ${message.type}:`, error)
                 }
             })
-        } else {
-            console.warn(`[Realtime] No handler registered for message type: ${message.type}`)
         }
     }
 
@@ -232,8 +230,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
     function send(message: unknown) {
         if (ws.value && ws.value.readyState === WebSocket.OPEN) {
             ws.value.send(JSON.stringify(message))
-        } else {
-            console.error('[Realtime] Cannot send message: not connected')
         }
     }
 

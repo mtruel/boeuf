@@ -9,11 +9,12 @@ import (
 type MessageType string
 
 const (
-	TypeSessionSnapshot   MessageType = "SESSION_SNAPSHOT"
-	TypeParticipantJoined MessageType = "PARTICIPANT_JOINED"
-	TypeParticipantLeft   MessageType = "PARTICIPANT_LEFT"
-	TypeWSError           MessageType = "WS_ERROR"
-	TypeWSForbidden       MessageType = "WS_FORBIDDEN"
+	TypeSessionSnapshot             MessageType = "SESSION_SNAPSHOT"
+	TypeParticipantJoined           MessageType = "PARTICIPANT_JOINED"
+	TypeParticipantLeft             MessageType = "PARTICIPANT_LEFT"
+	TypeParticipantSyncStateChanged MessageType = "PARTICIPANT_SYNC_STATE_CHANGED"
+	TypeWSError                     MessageType = "WS_ERROR"
+	TypeWSForbidden                 MessageType = "WS_FORBIDDEN"
 )
 
 // Message represents the standard WebSocket message envelope
@@ -36,6 +37,7 @@ type SessionSnapshotPayload struct {
 type ParticipantInfo struct {
 	UserID           string `json:"userId"`
 	Role             string `json:"role"`             // "host" or "participant"
+	SyncState        string `json:"syncState"`        // "ready" or "synced"
 	LastSeenAt       string `json:"lastSeenAt"`       // RFC3339 UTC
 	ConnectionStatus string `json:"connectionStatus"` // "online" or "offline"
 }
@@ -59,6 +61,13 @@ type ParticipantJoinedPayload struct {
 // ParticipantLeftPayload for PARTICIPANT_LEFT events
 type ParticipantLeftPayload struct {
 	UserID    string `json:"userId"`
+	Timestamp string `json:"timestamp"` // RFC3339 UTC
+}
+
+// ParticipantSyncStateChangedPayload for PARTICIPANT_SYNC_STATE_CHANGED events
+type ParticipantSyncStateChangedPayload struct {
+	UserID    string `json:"userId"`
+	SyncState string `json:"syncState"` // "ready" or "synced"
 	Timestamp string `json:"timestamp"` // RFC3339 UTC
 }
 

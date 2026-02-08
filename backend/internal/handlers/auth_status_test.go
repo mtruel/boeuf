@@ -105,7 +105,7 @@ func TestAuthStatusAuthenticated(t *testing.T) {
 		t.Error("Expected authenticated=true for authenticated user")
 	}
 
-	if result["spotify_user_id"] != "user_123" {
-		t.Errorf("Expected spotify_user_id=user_123, got %v", result["spotify_user_id"])
+	if result["spotifyUserId"] != "user_123" {
+		t.Errorf("Expected spotifyUserId=user_123, got %v", result["spotifyUserId"])
 	}
 }

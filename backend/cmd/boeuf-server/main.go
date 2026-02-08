@@ -94,6 +94,8 @@ func main() {
 	authStatusHandler := handlers.NewAuthStatusHandler(sessionStore, tokenRepo)
 	sessionHandler := handlers.NewSessionHandlerWithDuration(sessionStore, db, publicURL, sessionDuration)
 	sessionHandler.SetMaxActiveSessionsPerUser(maxActiveSessionsPerUser)
+	sessionHandler.SetSpotifyClient(spotifyClient)
+	sessionHandler.SetRealtimeHub(hub)
 	wsHandler := handlers.NewWebSocketHandler(hub, sessionStore, db)
 
 	// Configure hub to broadcast PARTICIPANT_LEFT on disconnection
@@ -139,12 +141,11 @@ func main() {
 
 	// Protected routes (require participant access control)
 	accessControl := handlers.NewAccessControlMiddleware(sessionStore, db)
-	// Example protected route - will be used in future stories for session data access
-	router.Handle("/api/sessions/{sessionId}", accessControl.RequireParticipant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// This is a placeholder - real implementation will come in future stories
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"protected_endpoint_accessed"}`))
-	}))).Methods(http.MethodGet)
+	router.Handle("/api/sessions/{sessionId}", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.GetSession))).Methods(http.MethodGet)
+
+	// Sync endpoints (require participant access control)
+	router.Handle("/api/sessions/{sessionId}/me", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.GetParticipantMe))).Methods(http.MethodGet)
+	router.Handle("/api/sessions/{sessionId}/sync/start", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.StartSync))).Methods(http.MethodPost)
 
 	// Enable CORS for development
 	handler := corsMiddleware(router)

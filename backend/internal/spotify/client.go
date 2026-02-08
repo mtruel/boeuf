@@ -115,11 +115,11 @@ func (c *Client) refreshToken(ctx context.Context, token *models.SpotifyToken) (
 				}
 			}
 
-			// If wait is too long (e.g. > 5s), fail fast for user experience
-			// otherwise wait and retry
+			// If wait is too long (e.g. > 5s), fail fast for user experience.
+			// Otherwise wait and retry.
 			if retryAfter > 5 {
 				resp.Body.Close()
-				return "", fmt.Errorf("spotify rate limit exceeded, retry after %d seconds", retryAfter)
+				return "", &RateLimitedError{RetryAfterSeconds: retryAfter}
 			}
 
 			resp.Body.Close()
@@ -134,9 +134,18 @@ func (c *Client) refreshToken(ctx context.Context, token *models.SpotifyToken) (
 
 	body, _ := io.ReadAll(resp.Body)
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		retryAfter := 1
+		if h := resp.Header.Get("Retry-After"); h != "" {
+			if n, _ := strconv.Atoi(h); n > 0 {
+				retryAfter = n
+			}
+		}
+		return "", &RateLimitedError{RetryAfterSeconds: retryAfter}
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		// Refresh failed (likely revoked token)
-		// TODO: Distinguish between 429 (rate limit) and 401 (revoked)
 		return "", ErrSpotifyNotConnected
 	}
 
