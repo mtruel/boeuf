@@ -103,7 +103,7 @@ NFR16: Les contrastes de couleurs respectent un ratio minimum de 4.5:1
 - Feedback en arrière-plan: notifier via UI + (optionnel) canal navigateur (title/favicon/notifications) sans bloquer l’écoute.
 - Responsive: desktop-first, mais mobile fonctionnel; le Social Panel devient un `Sheet/Drawer` sur mobile.
 - Accessibilité: clavier, contrastes, `aria-live` pour changements d’état, respect `prefers-reduced-motion`.
-- Point à trancher (cohérence sécurité): l’UX mentionne un stockage de clés API en LocalStorage, mais les règles de sécurité indiquent “aucun secret persistant côté frontend”. On doit privilégier stockage côté serveur (env/DB) et ajuster le flux UX.
+- Décision (cohérence sécurité): **aucun secret persistant côté frontend**. Les credentials Spotify (client id/secret) sont configurés **côté serveur** (MVP self-hosted: variables d’environnement / `.env` Docker Compose). Le frontend peut afficher un statut “instance configurée” et des instructions, mais ne stocke pas de secrets.
 
 ### FR Coverage Map
 
@@ -198,6 +198,11 @@ So that je peux itérer rapidement et valider l’intégration bout-en-bout.
 **When** je lance `docker compose up`
 **Then** le reverse proxy (Caddy) sert le frontend et reverse-proxy le backend
 **And** les communications en prod passent par HTTPS/WSS
+
+**Given** une instance self-hosted
+**When** je configure les secrets serveur via `.env`/variables d’environnement
+**Then** le backend démarre avec `SPOTIFY_CLIENT_ID` et `SPOTIFY_CLIENT_SECRET` disponibles côté serveur
+**And** aucun secret Spotify n’est stocké de manière persistante côté navigateur (LocalStorage/IndexedDB)
 
 ### Story 1.2: Auth Spotify (OAuth Authorization Code + PKCE) avec session cookie
 

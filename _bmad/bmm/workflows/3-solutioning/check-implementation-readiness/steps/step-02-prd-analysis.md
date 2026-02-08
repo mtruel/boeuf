@@ -3,11 +3,11 @@ name: 'step-02-prd-analysis'
 description: 'Read and analyze PRD to extract all FRs and NFRs for coverage validation'
 
 # Path Definitions
-workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/implementation-readiness'
+workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness'
 
 # File References
-thisStepFile: './step-02-prd-analysis.md'
-nextStepFile: './step-03-epic-coverage-validation.md'
+thisStepFile: './steps/step-02-prd-analysis.md'
+nextStepFile: './steps/step-03-epic-coverage-validation.md'
 workflowFile: '{workflow_path}/workflow.md'
 outputFile: '{planning_artifacts}/implementation-readiness-report-{{date}}.md'
 epicsFile: '{planning_artifacts}/*epic*.md' # Will be resolved to actual file
@@ -15,13 +15,13 @@ epicsFile: '{planning_artifacts}/*epic*.md' # Will be resolved to actual file
 
 # Step 2: PRD Analysis
 
-## STEP GOAL:
+## STEP GOAL
 
 To fully read and analyze the PRD document (whole or sharded) to extract all Functional Requirements (FRs) and Non-Functional Requirements (NFRs) for validation against epics coverage.
 
-## MANDATORY EXECUTION RULES (READ FIRST):
+## MANDATORY EXECUTION RULES (READ FIRST)
 
-### Universal Rules:
+### Universal Rules
 
 - 🛑 NEVER generate content without user input
 - 📖 CRITICAL: Read the complete step file before taking any action
@@ -29,28 +29,28 @@ To fully read and analyze the PRD document (whole or sharded) to extract all Fun
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
-### Role Reinforcement:
+### Role Reinforcement
 
 - ✅ You are an expert Product Manager and Scrum Master
 - ✅ Your expertise is in requirements analysis and traceability
 - ✅ You think critically about requirement completeness
 - ✅ Success is measured in thorough requirement extraction
 
-### Step-Specific Rules:
+### Step-Specific Rules
 
 - 🎯 Focus ONLY on reading and extracting from PRD
 - 🚫 Don't validate files (done in step 1)
 - 💬 Read PRD completely - whole or all sharded files
 - 🚪 Extract every FR and NFR with numbering
 
-## EXECUTION PROTOCOLS:
+## EXECUTION PROTOCOLS
 
 - 🎯 Load and completely read the PRD
 - 💾 Extract all requirements systematically
 - 📖 Document findings in the report
 - 🚫 FORBIDDEN to skip or summarize PRD content
 
-## PRD ANALYSIS PROCESS:
+## PRD ANALYSIS PROCESS
 
 ### 1. Initialize PRD Analysis
 
@@ -161,14 +161,14 @@ PRD analysis complete. Loading next step to validate epic coverage.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS
 
-### ✅ SUCCESS:
+### ✅ SUCCESS
 
 - PRD loaded and read completely
 - All FRs extracted with full text
 - All NFRs identified and documented
 - Findings added to assessment report
 
-### ❌ SYSTEM FAILURE:
+### ❌ SYSTEM FAILURE
 
 - Not reading complete PRD (especially sharded versions)
 - Missing requirements in extraction

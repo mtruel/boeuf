@@ -3,11 +3,11 @@ name: 'step-05-epic-quality-review'
 description: 'Validate epics and stories against create-epics-and-stories best practices'
 
 # Path Definitions
-workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/implementation-readiness'
+workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness'
 
 # File References
-thisStepFile: './step-05-epic-quality-review.md'
-nextStepFile: './step-06-final-assessment.md'
+thisStepFile: './steps/step-05-epic-quality-review.md'
+nextStepFile: './steps/step-06-final-assessment.md'
 workflowFile: '{workflow_path}/workflow.md'
 outputFile: '{planning_artifacts}/implementation-readiness-report-{{date}}.md'
 epicsBestPractices: '{project-root}/_bmad/bmm/workflows/3-solutioning/create-epics-and-stories'
@@ -15,13 +15,13 @@ epicsBestPractices: '{project-root}/_bmad/bmm/workflows/3-solutioning/create-epi
 
 # Step 5: Epic Quality Review
 
-## STEP GOAL:
+## STEP GOAL
 
 To validate epics and stories against the best practices defined in create-epics-and-stories workflow, focusing on user value, independence, dependencies, and implementation readiness.
 
-## MANDATORY EXECUTION RULES (READ FIRST):
+## MANDATORY EXECUTION RULES (READ FIRST)
 
-### Universal Rules:
+### Universal Rules
 
 - 🛑 NEVER generate content without user input
 - 📖 CRITICAL: Read the complete step file before taking any action
@@ -29,7 +29,7 @@ To validate epics and stories against the best practices defined in create-epics
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
-### Role Reinforcement:
+### Role Reinforcement
 
 - ✅ You are an EPIC QUALITY ENFORCER
 - ✅ You know what good epics look like - challenge anything deviating
@@ -37,21 +37,21 @@ To validate epics and stories against the best practices defined in create-epics
 - ✅ Forward dependencies are forbidden - catch them
 - ✅ Stories must be independently completable
 
-### Step-Specific Rules:
+### Step-Specific Rules
 
 - 🎯 Apply create-epics-and-stories standards rigorously
 - 🚫 Don't accept "technical milestones" as epics
 - 💬 Challenge every dependency on future work
 - 🚪 Verify proper story sizing and structure
 
-## EXECUTION PROTOCOLS:
+## EXECUTION PROTOCOLS
 
 - 🎯 Systematically validate each epic and story
 - 💾 Document all violations of best practices
 - 📖 Check every dependency relationship
 - 🚫 FORBIDDEN to accept structural problems
 
-## EPIC QUALITY REVIEW PROCESS:
+## EPIC QUALITY REVIEW PROCESS
 
 ### 1. Initialize Best Practices Validation
 
@@ -217,7 +217,7 @@ This review runs autonomously to maintain standards:
 - Provide clear remediation guidance
 - Prepare recommendations for each issue
 
-## REVIEW COMPLETION:
+## REVIEW COMPLETION
 
 After completing epic quality review:
 
@@ -234,7 +234,7 @@ This step executes autonomously. Load {nextStepFile} only after complete epic qu
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS
 
-### ✅ SUCCESS:
+### ✅ SUCCESS
 
 - All epics validated against best practices
 - Every dependency checked and verified
@@ -242,7 +242,7 @@ This step executes autonomously. Load {nextStepFile} only after complete epic qu
 - Clear remediation guidance provided
 - No compromise on standards enforcement
 
-### ❌ SYSTEM FAILURE:
+### ❌ SYSTEM FAILURE
 
 - Accepting technical epics as valid
 - Ignoring forward dependencies

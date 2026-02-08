@@ -272,7 +272,7 @@ graph TD
 
 ### Journey 2: The Host Setup (Technical Onboarding)
 
-**Goal**: Guide a non-technical host through the one-time configuration of Spotify API keys without overwhelming them.
+**Goal**: Guide a non-technical host through the one-time configuration of Spotify API credentials without overwhelming them, **without ever persisting secrets in the browser**.
 **Key Design Pattern**: "Progressive Disclosure" - Only show complex fields when necessary.
 
 ```mermaid
@@ -283,14 +283,20 @@ graph TD
     
     subgraph Configuration Flow
         D --> E[Step 1: Link to Spotify Dev Dashboard]
-        E --> F[Step 2: Input Client ID & Secret]
+      E --> F[Step 2: Configure server credentials (no browser storage)]
         F --> G[Step 3: Test Connection]
     end
     
-    G -->|Success| H[Save Keys to LocalStorage]
+    G -->|Success| H[Persist config server-side or via env; cache only "configured" state in UI]
     H --> C
     G -->|Fail| F[Show Error & Retry]
 ```
+
+  **Security rule (MVP):**
+
+* Le **Client Secret ne doit jamais** être stocké en LocalStorage / IndexedDB / cookies non-HTTPOnly.
+* Modèle recommandé (self-hosted MVP): configuration via **variables d’environnement serveur** (ex: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`).
+* Option si on veut un wizard in-app plus tard: l’utilisateur saisit les valeurs, elles sont envoyées au backend et **stockées chiffrées côté serveur**; le frontend ne conserve qu’un indicateur “instance configurée”.
 
 ### Journey 3: The Social Loop (Unified Side Panel)
 
