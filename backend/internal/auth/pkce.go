@@ -10,13 +10,14 @@ import (
 )
 
 const (
-	SpotifyAuthURL = "https://accounts.spotify.com/authorize"
+	SpotifyAuthURL         = "https://accounts.spotify.com/authorize"
+	pkceVerifierByteLength = 64
 )
 
 // GenerateCodeVerifier creates a cryptographically random code verifier
 // as per RFC 7636 (43-128 characters, URL-safe)
 func GenerateCodeVerifier() (string, error) {
-	b := make([]byte, 64) // 64 bytes = 86 base64 chars (within 43-128 range)
+	b := make([]byte, pkceVerifierByteLength) // 64 bytes = 86 base64 chars (within 43-128 range)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("failed to generate random verifier: %w", err)
 	}

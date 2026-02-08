@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"github.com/mathias/boeuf/internal/models"
+	"github.com/mathias/boeuf/internal/session"
 	"gorm.io/gorm"
 )
 
@@ -19,12 +19,12 @@ const sessionIDKey contextKey = "sessionID"
 
 // AccessControlMiddleware provides session-based access control
 type AccessControlMiddleware struct {
-	store *sessions.CookieStore
+	store session.Store
 	db    *gorm.DB
 }
 
 // NewAccessControlMiddleware creates a new access control middleware
-func NewAccessControlMiddleware(store *sessions.CookieStore, db *gorm.DB) *AccessControlMiddleware {
+func NewAccessControlMiddleware(store session.Store, db *gorm.DB) *AccessControlMiddleware {
 	return &AccessControlMiddleware{
 		store: store,
 		db:    db,
@@ -48,14 +48,14 @@ func (m *AccessControlMiddleware) RequireParticipant(next http.Handler) http.Han
 		}
 
 		// Check authentication
-		session, err := m.store.Get(r, "boeuf-session")
+		sess, err := m.store.Get(r, "boeuf-session")
 		if err != nil {
 			log.Printf("ERROR: Failed to get session: %v", err)
 			m.sendErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to access session")
 			return
 		}
 
-		userID, ok := session.Values["spotify_user_id"].(string)
+		userID, ok := sess.Values["spotify_user_id"].(string)
 		if !ok || userID == "" {
 			m.sendErrorResponse(w, http.StatusUnauthorized, "UNAUTHENTICATED", "Authentication required")
 			return

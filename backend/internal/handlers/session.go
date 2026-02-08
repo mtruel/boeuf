@@ -15,15 +15,15 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"github.com/mathias/boeuf/internal/models"
 	"github.com/mathias/boeuf/internal/realtime"
+	"github.com/mathias/boeuf/internal/session"
 	"github.com/mathias/boeuf/internal/spotify"
 	"gorm.io/gorm"
 )
 
 type SessionHandler struct {
-	store                    *sessions.CookieStore
+	store                    session.Store
 	db                       *gorm.DB
 	baseURL                  string
 	sessionDuration          time.Duration
@@ -34,7 +34,7 @@ type SessionHandler struct {
 	realtimeHub              *realtime.Hub
 }
 
-func NewSessionHandler(store *sessions.CookieStore, db *gorm.DB, baseURL string) *SessionHandler {
+func NewSessionHandler(store session.Store, db *gorm.DB, baseURL string) *SessionHandler {
 	return &SessionHandler{
 		store:                    store,
 		db:                       db,
@@ -49,7 +49,7 @@ func NewSessionHandler(store *sessions.CookieStore, db *gorm.DB, baseURL string)
 }
 
 // NewSessionHandlerWithDuration creates a SessionHandler with custom session duration
-func NewSessionHandlerWithDuration(store *sessions.CookieStore, db *gorm.DB, baseURL string, duration time.Duration) *SessionHandler {
+func NewSessionHandlerWithDuration(store session.Store, db *gorm.DB, baseURL string, duration time.Duration) *SessionHandler {
 	return &SessionHandler{
 		store:                    store,
 		db:                       db,

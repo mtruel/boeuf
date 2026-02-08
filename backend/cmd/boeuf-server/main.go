@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -24,6 +28,13 @@ type HealthResponse struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Printf("ERROR: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Load configuration
 	port := getEnv("PORT", "8080")
 	sessionKey := getEnv("SESSION_KEY", "")
@@ -50,19 +61,19 @@ func main() {
 
 	// Validate required config
 	if sessionKey == "" || len(sessionKey) != 32 {
-		log.Fatal("SESSION_KEY must be set and exactly 32 bytes")
+		return fmt.Errorf("SESSION_KEY must be set and exactly 32 bytes")
 	}
 	if encryptionKey == "" || len(encryptionKey) != 32 {
-		log.Fatal("ENCRYPTION_KEY must be set and exactly 32 bytes")
+		return fmt.Errorf("ENCRYPTION_KEY must be set and exactly 32 bytes")
 	}
 	if spotifyClientID == "" {
-		log.Fatal("SPOTIFY_CLIENT_ID must be set")
+		return fmt.Errorf("SPOTIFY_CLIENT_ID must be set")
 	}
 
 	// Initialize database
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Run migrations
@@ -70,7 +81,7 @@ func main() {
 	// For a production-grade release later, we should switch to `goose` or `golang-migrate`
 	// to handle complex schema changes that GORM cannot automate.
 	if err := db.AutoMigrate(&models.SpotifyToken{}, &models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}, &models.Event{}); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	// Initialize repositories and services
@@ -92,8 +103,7 @@ func main() {
 	playerPoller := session.NewPlayerPoller(db, spotifyClient, hub, 5*time.Second)
 
 	// Initialize handlers
-	authHandler := handlers.NewSpotifyAuthHandler(sessionStore)
-	authHandler.SetTokenService(tokenService)
+	authHandler := handlers.NewSpotifyAuthHandler(sessionStore, tokenService)
 	authStatusHandler := handlers.NewAuthStatusHandler(sessionStore, tokenRepo)
 	sessionHandler := handlers.NewSessionHandlerWithDuration(sessionStore, db, publicURL, sessionDuration)
 	sessionHandler.SetMaxActiveSessionsPerUser(maxActiveSessionsPerUser)
@@ -120,69 +130,88 @@ func main() {
 
 	// Initialize session cleanup
 	sessionCleaner := handlers.NewSessionCleaner(db)
-
-	// Start periodic cleanup in background (every hour)
-	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-
-		// Run initial cleanup on startup
-		if err := sessionCleaner.RunPeriodicCleanup(); err != nil {
-			log.Printf("WARNING: Initial session cleanup failed: %v", err)
-		}
-
-		// Run periodic cleanup
-		for range ticker.C {
-			if err := sessionCleaner.RunPeriodicCleanup(); err != nil {
-				log.Printf("WARNING: Periodic session cleanup failed: %v", err)
-			}
-		}
-	}()
+	cleanupService := handlers.NewCleanupService(sessionCleaner, time.Hour)
+	cleanupService.Start()
 
 	// Setup routes with gorilla/mux for path variable support
 	router := mux.NewRouter()
 
 	// Public routes
-	router.HandleFunc("/api/health", healthHandler)
-	router.HandleFunc("/auth/spotify/start", authHandler.Start)
-	router.HandleFunc("/auth/spotify/callback", authHandler.Callback)
-	router.HandleFunc("/api/auth/logout", authHandler.Logout).Methods(http.MethodPost)
-	router.HandleFunc("/api/auth/status", authStatusHandler.Status)
-	router.HandleFunc("/api/sessions", sessionHandler.Create).Methods(http.MethodPost)
-	router.HandleFunc("/api/sessions/join", sessionHandler.Join).Methods(http.MethodPost)
-
-	// WebSocket route (requires authentication)
-	router.HandleFunc("/ws/{sessionId}", wsHandler.HandleConnection)
+	registerRoutes(router, []routeDefinition{
+		{method: http.MethodGet, path: "/api/health", handler: healthHandler},
+		{method: http.MethodGet, path: "/auth/spotify/start", handler: authHandler.Start},
+		{method: http.MethodGet, path: "/auth/spotify/callback", handler: authHandler.Callback},
+		{method: http.MethodPost, path: "/api/auth/logout", handler: authHandler.Logout},
+		{method: http.MethodGet, path: "/api/auth/status", handler: authStatusHandler.Status},
+		{method: http.MethodPost, path: "/api/sessions", handler: sessionHandler.Create},
+		{method: http.MethodPost, path: "/api/sessions/join", handler: sessionHandler.Join},
+		{method: http.MethodGet, path: "/ws/{sessionId}", handler: wsHandler.HandleConnection},
+	})
 
 	// Protected routes (require participant access control)
 	accessControl := handlers.NewAccessControlMiddleware(sessionStore, db)
-	router.Handle("/api/sessions/{sessionId}", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.GetSession))).Methods(http.MethodGet)
-
-	// Sync endpoints (require participant access control)
-	router.Handle("/api/sessions/{sessionId}/me", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.GetParticipantMe))).Methods(http.MethodGet)
-	router.Handle("/api/sessions/{sessionId}/sync/start", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.StartSync))).Methods(http.MethodPost)
-
-	// Player control endpoints (require participant access control + synced state)
-	router.Handle("/api/sessions/{sessionId}/player/state", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.GetPlayerState))).Methods(http.MethodGet)
-	router.Handle("/api/sessions/{sessionId}/player/pause", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.PausePlayer))).Methods(http.MethodPost)
-	router.Handle("/api/sessions/{sessionId}/player/resume", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.ResumePlayer))).Methods(http.MethodPost)
-	router.Handle("/api/sessions/{sessionId}/player/next", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.NextTrack))).Methods(http.MethodPost)
-	router.Handle("/api/sessions/{sessionId}/player/seek", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.SeekPlayer))).Methods(http.MethodPost)
+	registerParticipantRoutes(router, accessControl, []routeDefinition{
+		{method: http.MethodGet, path: "/api/sessions/{sessionId}", handler: sessionHandler.GetSession},
+		{method: http.MethodGet, path: "/api/sessions/{sessionId}/me", handler: sessionHandler.GetParticipantMe},
+		{method: http.MethodPost, path: "/api/sessions/{sessionId}/sync/start", handler: sessionHandler.StartSync},
+		{method: http.MethodGet, path: "/api/sessions/{sessionId}/player/state", handler: playerHandler.GetPlayerState},
+		{method: http.MethodPost, path: "/api/sessions/{sessionId}/player/pause", handler: playerHandler.PausePlayer},
+		{method: http.MethodPost, path: "/api/sessions/{sessionId}/player/resume", handler: playerHandler.ResumePlayer},
+		{method: http.MethodPost, path: "/api/sessions/{sessionId}/player/next", handler: playerHandler.NextTrack},
+		{method: http.MethodPost, path: "/api/sessions/{sessionId}/player/seek", handler: playerHandler.SeekPlayer},
+	})
 
 	// Enable CORS for development
 	handler := corsMiddleware(router)
-
-	// Store spotify client in context for future use
-	_ = spotifyClient // Will be used in future stories
 
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Backend server starting on %s", addr)
 	log.Printf("Database: %s", dbPath)
 	log.Printf("Environment: %s", getEnv("ENV", "development"))
 
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		log.Fatal(err)
+	server := &http.Server{
+		Addr:    addr,
+		Handler: handler,
 	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- server.ListenAndServe()
+	}()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serverErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			playerPoller.StopAll()
+			cleanupService.Stop(cleanupCtx)
+			return fmt.Errorf("server error: %w", err)
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		playerPoller.StopAll()
+		cleanupService.Stop(cleanupCtx)
+		return nil
+	case <-ctx.Done():
+		log.Printf("Shutdown signal received")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		playerPoller.StopAll()
+		cleanupService.Stop(shutdownCtx)
+		return fmt.Errorf("server shutdown failed: %w", err)
+	}
+
+	playerPoller.StopAll()
+	cleanupService.Stop(shutdownCtx)
+	return nil
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -224,4 +253,28 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+type routeDefinition struct {
+	method  string
+	path    string
+	handler http.HandlerFunc
+}
+
+func registerRoutes(router *mux.Router, routes []routeDefinition) {
+	for _, route := range routes {
+		h := router.HandleFunc(route.path, route.handler)
+		if route.method != "" {
+			h.Methods(route.method)
+		}
+	}
+}
+
+func registerParticipantRoutes(router *mux.Router, accessControl *handlers.AccessControlMiddleware, routes []routeDefinition) {
+	for _, route := range routes {
+		h := router.Handle(route.path, accessControl.RequireParticipant(http.HandlerFunc(route.handler)))
+		if route.method != "" {
+			h.Methods(route.method)
+		}
+	}
 }

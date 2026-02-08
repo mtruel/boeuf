@@ -109,3 +109,143 @@ func TestAuthStatusAuthenticated(t *testing.T) {
 		t.Errorf("Expected spotifyUserId=user_123, got %v", result["spotifyUserId"])
 	}
 }
+
+func TestAuthStatusExpiredToken(t *testing.T) {
+	// ARRANGE
+	db := setupTestDBForAuthStatus(t)
+	repo := repository.NewSpotifyTokenRepository(db)
+
+	// Save an expired token in DB
+	token := &models.SpotifyToken{
+		SpotifyUserID:         "user_456",
+		AccessToken:           "access_token",
+		RefreshTokenEncrypted: "encrypted_refresh",
+		ExpiresAt:             time.Now().Add(-1 * time.Hour),
+		Scope:                 "user-read-playback-state",
+	}
+	repo.Save(token)
+
+	sessionKey := "test-session-key-32-bytes-long!!"
+	store := session.NewStore(sessionKey, false)
+
+	handler := handlers.NewAuthStatusHandler(store, repo)
+
+	req := httptest.NewRequest("GET", "/api/auth/status", nil)
+	w := httptest.NewRecorder()
+
+	// Set spotify_user_id in session
+	sess, _ := store.Get(req, "boeuf-session")
+	sess.Values["spotify_user_id"] = "user_456"
+	sess.Save(req, w)
+
+	// Use cookies from response in new request
+	cookies := w.Result().Cookies()
+	req2 := httptest.NewRequest("GET", "/api/auth/status", nil)
+	for _, cookie := range cookies {
+		req2.AddCookie(cookie)
+	}
+	w2 := httptest.NewRecorder()
+
+	// ACT
+	handler.Status(w2, req2)
+
+	// ASSERT
+	resp := w2.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result["authenticated"] != false {
+		t.Error("Expected authenticated=false for expired token")
+	}
+}
+
+func TestAuthStatusMalformedSessionValue(t *testing.T) {
+	// ARRANGE
+	db := setupTestDBForAuthStatus(t)
+	repo := repository.NewSpotifyTokenRepository(db)
+	sessionKey := "test-session-key-32-bytes-long!!"
+	store := session.NewStore(sessionKey, false)
+
+	handler := handlers.NewAuthStatusHandler(store, repo)
+
+	req := httptest.NewRequest("GET", "/api/auth/status", nil)
+	w := httptest.NewRecorder()
+
+	// Set malformed spotify_user_id in session
+	sess, _ := store.Get(req, "boeuf-session")
+	sess.Values["spotify_user_id"] = 123
+	sess.Save(req, w)
+
+	// Use cookies from response in new request
+	cookies := w.Result().Cookies()
+	req2 := httptest.NewRequest("GET", "/api/auth/status", nil)
+	for _, cookie := range cookies {
+		req2.AddCookie(cookie)
+	}
+	w2 := httptest.NewRecorder()
+
+	// ACT
+	handler.Status(w2, req2)
+
+	// ASSERT
+	resp := w2.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result["authenticated"] != false {
+		t.Error("Expected authenticated=false for malformed session value")
+	}
+}
+
+func TestAuthStatusDatabaseError(t *testing.T) {
+	// ARRANGE
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to connect to test database: %v", err)
+	}
+	repo := repository.NewSpotifyTokenRepository(db)
+	sessionKey := "test-session-key-32-bytes-long!!"
+	store := session.NewStore(sessionKey, false)
+
+	handler := handlers.NewAuthStatusHandler(store, repo)
+
+	req := httptest.NewRequest("GET", "/api/auth/status", nil)
+	w := httptest.NewRecorder()
+
+	// Set spotify_user_id in session
+	sess, _ := store.Get(req, "boeuf-session")
+	sess.Values["spotify_user_id"] = "user_999"
+	sess.Save(req, w)
+
+	// Use cookies from response in new request
+	cookies := w.Result().Cookies()
+	req2 := httptest.NewRequest("GET", "/api/auth/status", nil)
+	for _, cookie := range cookies {
+		req2.AddCookie(cookie)
+	}
+	w2 := httptest.NewRecorder()
+
+	// ACT
+	handler.Status(w2, req2)
+
+	// ASSERT
+	resp := w2.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result["authenticated"] != false {
+		t.Error("Expected authenticated=false for database error")
+	}
+}

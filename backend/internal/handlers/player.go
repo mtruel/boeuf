@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"github.com/mathias/boeuf/internal/models"
 	"github.com/mathias/boeuf/internal/realtime"
+	"github.com/mathias/boeuf/internal/session"
 	"github.com/mathias/boeuf/internal/spotify"
 	"gorm.io/gorm"
 )
 
 // PlayerHandler handles player control commands (pause, resume, next, seek)
 type PlayerHandler struct {
-	sessionStore     *sessions.CookieStore
+	sessionStore     session.Store
 	db               *gorm.DB
 	spotifyClient    *spotify.Client
 	hub              *realtime.Hub
@@ -25,7 +25,7 @@ type PlayerHandler struct {
 }
 
 // NewPlayerHandler creates a new PlayerHandler
-func NewPlayerHandler(sessionStore *sessions.CookieStore, db *gorm.DB, spotifyClient *spotify.Client, hub *realtime.Hub) *PlayerHandler {
+func NewPlayerHandler(sessionStore session.Store, db *gorm.DB, spotifyClient *spotify.Client, hub *realtime.Hub) *PlayerHandler {
 	return &PlayerHandler{
 		sessionStore:     sessionStore,
 		db:               db,

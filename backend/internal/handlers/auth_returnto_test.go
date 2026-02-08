@@ -1,4 +1,4 @@
-package handlers
+package handlers_test
 
 import (
 	"net/http"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/sessions"
+	"github.com/mathias/boeuf/internal/handlers"
 	"github.com/mathias/boeuf/internal/session"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,7 +16,7 @@ func TestOAuthReturnTo(t *testing.T) {
 	store := sessions.NewCookieStore([]byte("test-secret-key-32-bytes-long!"))
 
 	t.Run("Start with return_to query param stores it in session", func(t *testing.T) {
-		handler := NewSpotifyAuthHandler(store)
+		handler := handlers.NewSpotifyAuthHandler(store, nil)
 
 		// Set required env vars
 		t.Setenv("SPOTIFY_CLIENT_ID", "test_client_id")
@@ -52,18 +53,23 @@ func TestOAuthReturnTo(t *testing.T) {
 	})
 
 	t.Run("Callback with return_to in session redirects to it", func(t *testing.T) {
-		handler := NewSpotifyAuthHandler(store)
+		tokenService, cleanup := setupTestTokenService(t)
+		defer cleanup()
+		handler := handlers.NewSpotifyAuthHandler(store, tokenService)
+		t.Setenv("SPOTIFY_CLIENT_ID", "test_client_id")
+		t.Setenv("SPOTIFY_REDIRECT_URI", "http://localhost:8080/auth/spotify/callback")
 
 		// Create a request with session containing return_to
 		req := httptest.NewRequest(http.MethodGet, "/auth/spotify/callback?code=test_code&state=test_state", nil)
 		w := httptest.NewRecorder()
 
 		// Pre-populate session with OAuth state and return_to
-		sess, _ := store.Get(req, session.SessionName)
+		sess, err := store.Get(req, session.SessionName)
+		assert.NoError(t, err)
 		sess.Values["state"] = "test_state"
 		sess.Values["code_verifier"] = "test_verifier"
 		sess.Values["return_to"] = "/join/xyz789"
-		sess.Save(req, w)
+		assert.NoError(t, sess.Save(req, w))
 
 		// Get the session cookie from the recorder
 		cookies := w.Result().Cookies()
@@ -75,35 +81,53 @@ func TestOAuthReturnTo(t *testing.T) {
 			}
 		}
 
+		assert.NotNil(t, sessionCookie, "Session cookie should be set")
+
 		// Create new request with the session cookie
 		callbackReq := httptest.NewRequest(http.MethodGet, "/auth/spotify/callback?code=test_code&state=test_state", nil)
 		callbackReq.AddCookie(sessionCookie)
 		callbackW := httptest.NewRecorder()
 
-		// Mock token service to avoid real Spotify API call
-		// Note: This test will fail until we implement return_to logic
-		// For now, we're just verifying the redirect behavior
 		handler.Callback(callbackW, callbackReq)
 
-		// Without token service, it should fail at token exchange
-		// but this test structure is ready for when we implement return_to
-		// The assertion would be:
-		// assert.Equal(t, http.StatusFound, callbackW.Code)
-		// assert.Equal(t, "/join/xyz789", callbackW.Header().Get("Location"))
+		assert.Equal(t, http.StatusFound, callbackW.Code)
+		assert.Equal(t, "/join/xyz789", callbackW.Header().Get("Location"))
+
+		callbackCookies := callbackW.Result().Cookies()
+		var callbackSessionCookie *http.Cookie
+		for _, cookie := range callbackCookies {
+			if cookie.Name == session.SessionName {
+				callbackSessionCookie = cookie
+				break
+			}
+		}
+		assert.NotNil(t, callbackSessionCookie, "Session cookie should be set on callback")
+
+		verifyReq := httptest.NewRequest(http.MethodGet, "/", nil)
+		verifyReq.AddCookie(callbackSessionCookie)
+		updatedSession, err := store.Get(verifyReq, session.SessionName)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-user-id", updatedSession.Values["spotify_user_id"])
+		assert.Nil(t, updatedSession.Values["return_to"])
 	})
 
 	t.Run("Callback without return_to defaults to /", func(t *testing.T) {
-		handler := NewSpotifyAuthHandler(store)
+		tokenService, cleanup := setupTestTokenService(t)
+		defer cleanup()
+		handler := handlers.NewSpotifyAuthHandler(store, tokenService)
+		t.Setenv("SPOTIFY_CLIENT_ID", "test_client_id")
+		t.Setenv("SPOTIFY_REDIRECT_URI", "http://localhost:8080/auth/spotify/callback")
 
 		req := httptest.NewRequest(http.MethodGet, "/auth/spotify/callback?code=test_code&state=test_state", nil)
 		w := httptest.NewRecorder()
 
 		// Pre-populate session with OAuth state but NO return_to
-		sess, _ := store.Get(req, session.SessionName)
+		sess, err := store.Get(req, session.SessionName)
+		assert.NoError(t, err)
 		sess.Values["state"] = "test_state"
 		sess.Values["code_verifier"] = "test_verifier"
 		// Note: no return_to set
-		sess.Save(req, w)
+		assert.NoError(t, sess.Save(req, w))
 
 		cookies := w.Result().Cookies()
 		var sessionCookie *http.Cookie
@@ -113,6 +137,7 @@ func TestOAuthReturnTo(t *testing.T) {
 				break
 			}
 		}
+		assert.NotNil(t, sessionCookie, "Session cookie should be set")
 
 		callbackReq := httptest.NewRequest(http.MethodGet, "/auth/spotify/callback?code=test_code&state=test_state", nil)
 		callbackReq.AddCookie(sessionCookie)
@@ -120,9 +145,23 @@ func TestOAuthReturnTo(t *testing.T) {
 
 		handler.Callback(callbackW, callbackReq)
 
-		// This will also fail at token exchange, but validates the structure
-		// Expected assertion after implementation:
-		// assert.Equal(t, http.StatusFound, callbackW.Code)
-		// assert.Equal(t, "/", callbackW.Header().Get("Location"))
+		assert.Equal(t, http.StatusFound, callbackW.Code)
+		assert.Equal(t, "/", callbackW.Header().Get("Location"))
+
+		callbackCookies := callbackW.Result().Cookies()
+		var callbackSessionCookie *http.Cookie
+		for _, cookie := range callbackCookies {
+			if cookie.Name == session.SessionName {
+				callbackSessionCookie = cookie
+				break
+			}
+		}
+		assert.NotNil(t, callbackSessionCookie, "Session cookie should be set on callback")
+
+		verifyReq := httptest.NewRequest(http.MethodGet, "/", nil)
+		verifyReq.AddCookie(callbackSessionCookie)
+		updatedSession, err := store.Get(verifyReq, session.SessionName)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-user-id", updatedSession.Values["spotify_user_id"])
 	})
 }

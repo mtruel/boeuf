@@ -38,7 +38,7 @@ logs: ## Show logs (snapshot, non-blocking)
 watch-logs: ## Follow logs (blocking)
 	docker compose logs -f
 
-test: test-backend test-frontend ## Run all tests (local)
+test: test-backend test-frontend test-playwright ## Run all tests (local)
 
 test-quick: ## Run all local tests without rebuilding
 	@echo "Running All Tests (Local Quick Mode)..."
@@ -51,11 +51,15 @@ test-backend: ## Run Backend tests (Go, local)
 
 test-frontend: ## Run Frontend tests (Vitest, local)
 	@echo "Running Frontend Tests (Local)..."
-	pnpm --dir frontend run test:unit -- --run
+	@echo "Installing frontend dependencies..."
+	pnpm --dir frontend install
+	pnpm --dir frontend exec vitest run
 
 test-playwright: ## Run Playwright E2E tests (local; requires browser install)
 	@echo "Running Playwright E2E Tests (Local)..."
-	pnpm --dir frontend exec playwright test
+	@echo "Installing frontend dependencies..."
+	pnpm --dir frontend install
+	pnpm --dir frontend exec playwright test --project=chromium --project=firefox
 
 docker-test: docker-test-backend docker-test-frontend ## Run all tests via Docker
 

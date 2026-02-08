@@ -3,28 +3,56 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
-	"github.com/gorilla/sessions"
 	"github.com/mathias/boeuf/internal/auth"
 	"github.com/mathias/boeuf/internal/session"
 	"github.com/mathias/boeuf/internal/spotify"
 )
 
 type SpotifyAuthHandler struct {
-	store        *sessions.CookieStore
+	store        session.Store
 	tokenService *spotify.TokenService
 }
 
-func NewSpotifyAuthHandler(store *sessions.CookieStore) *SpotifyAuthHandler {
+func NewSpotifyAuthHandler(store session.Store, tokenService *spotify.TokenService) *SpotifyAuthHandler {
 	return &SpotifyAuthHandler{
 		store:        store,
-		tokenService: nil, // Will be set later when needed
+		tokenService: tokenService,
 	}
 }
 
-func (h *SpotifyAuthHandler) SetTokenService(service *spotify.TokenService) {
-	h.tokenService = service
+func isAllowedReturnTo(returnTo string) bool {
+	parsed, err := url.Parse(returnTo)
+	if err != nil {
+		return false
+	}
+
+	if parsed.Scheme != "" || parsed.Host != "" {
+		if os.Getenv("ENV") != "production" {
+			host := parsed.Hostname()
+			if strings.Contains(host, "localhost") || strings.Contains(host, "127.0.0.1") {
+				return true
+			}
+		}
+
+		publicURL := os.Getenv("PUBLIC_URL")
+		if publicURL == "" {
+			return false
+		}
+
+		parsedPublic, err := url.Parse(publicURL)
+		if err != nil {
+			log.Printf("ERROR: Invalid PUBLIC_URL: %v", err)
+			return false
+		}
+
+		return parsed.Hostname() == parsedPublic.Hostname()
+	}
+
+	return strings.HasPrefix(parsed.Path, "/")
 }
 
 // Start initiates the OAuth flow by redirecting to Spotify
@@ -69,7 +97,11 @@ func (h *SpotifyAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 	// Store return_to URL if provided (for post-OAuth redirect)
 	if returnTo := r.URL.Query().Get("return_to"); returnTo != "" {
-		sess.Values["return_to"] = returnTo
+		if isAllowedReturnTo(returnTo) {
+			sess.Values["return_to"] = returnTo
+		} else {
+			log.Printf("WARN: Rejected return_to parameter: %s", returnTo)
+		}
 	}
 
 	err = sess.Save(r, w)
@@ -139,18 +171,22 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	redirectURI := os.Getenv("SPOTIFY_REDIRECT_URI")
 
-	// Exchange code for tokens
-	if h.tokenService != nil {
-		result, err := h.tokenService.ExchangeCodeForTokens(r.Context(), code, codeVerifier, clientID, redirectURI)
-		if err != nil {
-			log.Printf("ERROR: Token exchange failed: %v", err)
-			http.Error(w, "Token exchange failed", http.StatusInternalServerError)
-			return
-		}
-
-		// Store spotify_user_id in session
-		sess.Values["spotify_user_id"] = result.SpotifyUserID
+	if h.tokenService == nil {
+		log.Printf("ERROR: Token service not initialized")
+		http.Error(w, "Token service not initialized", http.StatusInternalServerError)
+		return
 	}
+
+	// Exchange code for tokens
+	result, err := h.tokenService.ExchangeCodeForTokens(r.Context(), code, codeVerifier, clientID, redirectURI)
+	if err != nil {
+		log.Printf("ERROR: Token exchange failed: %v", err)
+		http.Error(w, "Token exchange failed", http.StatusInternalServerError)
+		return
+	}
+
+	// Store spotify_user_id in session
+	sess.Values["spotify_user_id"] = result.SpotifyUserID
 
 	// Clean up session PKCE data
 	delete(sess.Values, "state")
@@ -159,8 +195,16 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Get return_to URL from session (if set during Start)
 	returnTo, _ := sess.Values["return_to"].(string)
 	delete(sess.Values, "return_to") // Clean up after reading
+	if returnTo != "" && !isAllowedReturnTo(returnTo) {
+		log.Printf("WARN: Rejected return_to from session: %s", returnTo)
+		returnTo = ""
+	}
 
-	sess.Save(r, w)
+	if err := sess.Save(r, w); err != nil {
+		log.Printf("ERROR: Failed to save session in callback: %v", err)
+		http.Error(w, "Session save error", http.StatusInternalServerError)
+		return
+	}
 
 	// Redirect to frontend - use return_to if present, otherwise default to /
 	redirectURL := "/"
@@ -200,5 +244,7 @@ func (h *SpotifyAuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	log.Printf("INFO: User logged out successfully")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success":true}`))
+	if _, err := w.Write([]byte(`{"success":true}`)); err != nil {
+		log.Printf("ERROR: Failed to write logout response: %v", err)
+	}
 }

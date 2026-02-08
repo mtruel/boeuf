@@ -3,18 +3,18 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
-	"github.com/gorilla/sessions"
 	"github.com/mathias/boeuf/internal/repository"
 	"github.com/mathias/boeuf/internal/session"
 )
 
 type AuthStatusHandler struct {
-	store *sessions.CookieStore
+	store session.Store
 	repo  *repository.SpotifyTokenRepository
 }
 
-func NewAuthStatusHandler(store *sessions.CookieStore, repo *repository.SpotifyTokenRepository) *AuthStatusHandler {
+func NewAuthStatusHandler(store session.Store, repo *repository.SpotifyTokenRepository) *AuthStatusHandler {
 	return &AuthStatusHandler{
 		store: store,
 		repo:  repo,
@@ -46,6 +46,13 @@ func (h *AuthStatusHandler) Status(w http.ResponseWriter, r *http.Request) {
 	token, err := h.repo.GetBySpotifyUserID(spotifyUserID)
 	if err != nil || token == nil {
 		// No token found, not authenticated
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"authenticated": false,
+		})
+		return
+	}
+
+	if token.ExpiresAt.IsZero() || token.ExpiresAt.Before(time.Now()) {
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"authenticated": false,
 		})

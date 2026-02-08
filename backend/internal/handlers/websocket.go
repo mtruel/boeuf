@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	"github.com/mathias/boeuf/internal/models"
 	"github.com/mathias/boeuf/internal/realtime"
+	"github.com/mathias/boeuf/internal/session"
 	"gorm.io/gorm"
 )
 
@@ -64,12 +64,12 @@ var upgrader = websocket.Upgrader{
 // WebSocketHandler handles WebSocket connection upgrades
 type WebSocketHandler struct {
 	hub   *realtime.Hub
-	store *sessions.CookieStore
+	store session.Store
 	db    *gorm.DB
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
-func NewWebSocketHandler(hub *realtime.Hub, store *sessions.CookieStore, db *gorm.DB) *WebSocketHandler {
+func NewWebSocketHandler(hub *realtime.Hub, store session.Store, db *gorm.DB) *WebSocketHandler {
 	return &WebSocketHandler{
 		hub:   hub,
 		store: store,
