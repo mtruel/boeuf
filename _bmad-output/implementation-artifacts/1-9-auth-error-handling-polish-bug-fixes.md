@@ -1,6 +1,6 @@
 # Story 1.9: Auth & Error Handling Polish (Bug Fixes)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -311,25 +311,25 @@ Cette story regroupe les bug fixes identifiés lors de la session de test du 202
 **Date:** 2026-02-07  
 **Reviewer:** Multi-Agent Code Review System
 
-- [ ] **[AI-Review][HIGH]** Handle write errors in auth handler responses (`w.Write(...)`) [backend/internal/handlers/auth.go]
-- [ ] **[AI-Review][MEDIUM]** Replace setter injection with constructor injection for `tokenService` [backend/internal/handlers/auth.go]
-- [ ] **[AI-Review][MEDIUM]** Remove defensive nil check that masks init errors [backend/internal/handlers/auth.go]
-- [ ] **[AI-Review][MEDIUM]** Validate `return_to` against allowed origins to prevent open redirect [backend/internal/handlers/auth.go]
-- [ ] **[AI-Review][MEDIUM]** Handle `json.Encoder.Encode` errors in response helpers [backend/internal/handlers/response.go]
-- [ ] **[AI-Review][LOW]** Replace `interface{}` with `any` in response helpers [backend/internal/handlers/response.go]
-- [ ] **[AI-Review][LOW]** Make PKCE verifier length a named constant [backend/internal/auth/pkce.go]
-- [ ] **[AI-Review][LOW]** Document 7-day session TTL magic number [backend/internal/session/session.go]
-- [ ] **[AI-Review][MEDIUM]** Introduce session store interface for testability [backend/internal/session]
-- [ ] **[AI-Review][HIGH]** Replace `log.Fatal` with graceful shutdown flow [backend/cmd/boeuf-server/main.go]
-- [ ] **[AI-Review][LOW]** Remove unused `_ = spotifyClient` assignment [backend/cmd/boeuf-server/main.go]
-- [ ] **[AI-Review][MEDIUM]** Refactor repetitive route setup [backend/cmd/boeuf-server/main.go]
-- [ ] **[AI-Review][MEDIUM]** Extract cleanup goroutine into service [backend/cmd/boeuf-server/main.go]
-- [ ] **[AI-Review][MEDIUM]** Implement `http.Server.Shutdown` with signal handling [backend/cmd/boeuf-server/main.go]
-- [ ] **[AI-Review][MEDIUM]** Use `t.Setenv` instead of `os.Setenv` in auth tests [backend/internal/handlers/auth_test.go]
-- [ ] **[AI-Review][MEDIUM]** Add callback handler tests (PKCE + error cases) [backend/internal/handlers/auth_test.go]
-- [ ] **[AI-Review][MEDIUM]** Fix package naming + complete callback tests with assertions [backend/internal/handlers/auth_returnto_test.go]
-- [ ] **[AI-Review][MEDIUM]** Add missing auth status edge cases (expired/malformed/DB errors) [backend/internal/handlers/auth_status_test.go]
-- [ ] **[AI-Review][MEDIUM]** Expand main server tests (init/config/errors) [backend/cmd/boeuf-server/main_test.go]
+ - [x] **[AI-Review][HIGH]** Handle write errors in auth handler responses (`w.Write(...)`) [backend/internal/handlers/auth.go]
+ - [x] **[AI-Review][MEDIUM]** Replace setter injection with constructor injection for `tokenService` [backend/internal/handlers/auth.go]
+ - [x] **[AI-Review][MEDIUM]** Remove defensive nil check that masks init errors [backend/internal/handlers/auth.go]
+ - [x] **[AI-Review][MEDIUM]** Validate `return_to` against allowed origins to prevent open redirect [backend/internal/handlers/auth.go]
+ - [x] **[AI-Review][MEDIUM]** Handle `json.Encoder.Encode` errors in response helpers [backend/internal/handlers/response.go]
+ - [x] **[AI-Review][LOW]** Replace `interface{}` with `any` in response helpers [backend/internal/handlers/response.go]
+ - [x] **[AI-Review][LOW]** Make PKCE verifier length a named constant [backend/internal/auth/pkce.go]
+ - [x] **[AI-Review][LOW]** Document 7-day session TTL magic number [backend/internal/session/session.go]
+ - [x] **[AI-Review][MEDIUM]** Introduce session store interface for testability [backend/internal/session]
+- [x] **[AI-Review][HIGH]** Replace `log.Fatal` with graceful shutdown flow [backend/cmd/boeuf-server/main.go]
+- [x] **[AI-Review][LOW]** Remove unused `_ = spotifyClient` assignment [backend/cmd/boeuf-server/main.go]
+- [x] **[AI-Review][MEDIUM]** Refactor repetitive route setup [backend/cmd/boeuf-server/main.go]
+- [x] **[AI-Review][MEDIUM]** Extract cleanup goroutine into service [backend/cmd/boeuf-server/main.go]
+- [x] **[AI-Review][MEDIUM]** Implement `http.Server.Shutdown` with signal handling [backend/cmd/boeuf-server/main.go]
+- [x] **[AI-Review][MEDIUM]** Use `t.Setenv` instead of `os.Setenv` in auth tests [backend/internal/handlers/auth_test.go]
+- [x] **[AI-Review][MEDIUM]** Add callback handler tests (PKCE + error cases) [backend/internal/handlers/auth_test.go]
+- [x] **[AI-Review][MEDIUM]** Fix package naming + complete callback tests with assertions [backend/internal/handlers/auth_returnto_test.go]
+- [x] **[AI-Review][MEDIUM]** Add missing auth status edge cases (expired/malformed/DB errors) [backend/internal/handlers/auth_status_test.go]
+- [x] **[AI-Review][MEDIUM]** Expand main server tests (init/config/errors) [backend/cmd/boeuf-server/main_test.go]
 
 ## Dev Notes
 
@@ -487,6 +487,22 @@ const retrySync = async () => {
 
 ### Backend Files Modified
 
+- `backend/internal/handlers/auth.go` - Log write failures for logout response + validate return_to
+- `backend/internal/handlers/auth_status.go` - Use session store interface
+- `backend/internal/handlers/access_control.go` - Use session store interface
+- `backend/cmd/boeuf-server/main.go` - Constructor injection, graceful shutdown, cleanup wiring, route helpers
+- `backend/internal/handlers/auth_test.go` - Update auth handler construction
+- `backend/internal/handlers/auth_test.go` - Callback tests for PKCE + error cases, t.Setenv usage
+- `backend/internal/handlers/auth_returnto_test.go` - Callback return_to tests with session assertions
+- `backend/internal/handlers/auth_status_test.go` - Auth status edge cases (expired, malformed, DB error)
+- `backend/cmd/boeuf-server/main_test.go` - Server init/config error coverage
+- `backend/internal/handlers/cleanup_service.go` - Background cleanup service for session cleanup
+- `backend/internal/handlers/session.go` - Use session store interface
+- `backend/internal/handlers/player.go` - Use session store interface
+- `backend/internal/handlers/websocket.go` - Use session store interface
+- `backend/internal/handlers/response.go` - Log JSON encode failures in response helpers
+- `backend/internal/auth/pkce.go` - Extract PKCE verifier length constant
+- `backend/internal/session/session.go` - Document session TTL rationale
 - `backend/internal/models/spotify_token.go` - Added `DisplayName` field to SpotifyToken model
 - `backend/internal/models/session.go` - Added `DisplayName` field to SessionParticipant model
 - `backend/internal/models/session_test.go` - Tests for session models with display name
@@ -609,6 +625,26 @@ const retrySync = async () => {
 - ✅ Resolved review finding [HIGH]: Device error responses missing `suggestedAction`
 - ✅ Resolved review finding [MEDIUM]: Backend tests using time.Time instead of int64
 
+### Completion Notes (2026-02-07)
+
+- ✅ Resolved review finding [HIGH]: Handle write errors in auth handler responses (log failure without breaking logout flow)
+- ✅ Resolved review finding [MEDIUM]: Inject token service via constructor for auth handler
+- ✅ Resolved review finding [MEDIUM]: Fail fast when token service is missing in auth callback
+- ✅ Resolved review finding [MEDIUM]: Validate return_to against allowed origins
+- ✅ Resolved review finding [MEDIUM]: Log JSON encoding failures in response helpers
+- ✅ Resolved review finding [LOW]: Replace interface{} with any in response helpers
+- ✅ Resolved review finding [LOW]: Use named constant for PKCE verifier length
+- ✅ Resolved review finding [LOW]: Document session TTL (7 days)
+- ✅ Resolved review finding [MEDIUM]: Introduced session store interface for handlers
+- ✅ Resolved review finding [HIGH]: Replaced log.Fatal with graceful shutdown and signal handling
+- ✅ Resolved review finding [MEDIUM]: Refactored server route registration helpers
+- ✅ Resolved review finding [MEDIUM]: Wired cleanup service into server startup/shutdown
+- ✅ Resolved review finding [LOW]: Removed unused spotify client placeholder
+- ✅ Resolved review finding [MEDIUM]: Auth callback test coverage and t.Setenv usage
+- ✅ Resolved review finding [MEDIUM]: Auth return_to tests assert session updates
+- ✅ Resolved review finding [MEDIUM]: Auth status edge cases (expired, malformed, DB error)
+- ✅ Resolved review finding [MEDIUM]: Server init/config error test coverage
+
 ### Device Error Handling Strategy
 
 **Date:** 2026-02-01
@@ -698,6 +734,36 @@ export async function apiFetch(url: string, options?: RequestInit) {
 - No shared state between tabs (limitation accepted for MVP)
 
 ## Change Log
+
+### 2026-02-07 - Review Follow-up: Auth Handler Write Errors
+
+- Addressed code review findings - 1 item resolved
+- Switched auth handler to constructor injection for token service
+- Enforced non-nil token service in OAuth callback with test coverage
+- Added return_to validation against allowed origins
+- Logged JSON encoder failures in response helpers
+- Switched response helper types to any
+- Named PKCE verifier length constant
+- Documented session TTL rationale
+- Switched handlers to session store interface for testability
+
+### 2026-02-07 - Review Follow-up: Server Shutdown and Cleanup
+
+- Replaced log.Fatal usage with error-return flow and graceful shutdown handling
+- Added signal handling with `http.Server.Shutdown` and timeout
+- Wired cleanup service into startup/shutdown lifecycle
+- Reduced repetitive route registration with helper functions
+
+### 2026-02-07 - Review Follow-up: Auth Callback Tests
+
+- Added callback test coverage for PKCE/state/error handling and return_to validation
+- Switched auth handler tests to use t.Setenv for env setup
+
+### 2026-02-07 - Review Follow-up: Auth Status + Server Tests
+
+- Expanded auth return_to tests with session assertions
+- Added auth status edge cases for expired tokens, malformed session values, and DB errors
+- Added server init/config/database error tests in main
 
 ### 2026-02-06 - Review Follow-up: E2E Coverage + Test Fixes
 
