@@ -8,7 +8,7 @@ Status: done
 
 - ✅ LOW-1: Condensed verbose changelog into single consolidated entry
 - ℹ️ LOW-2: Vue Router injection warnings analyzed and accepted as non-blocking
-  - Warnings occur because components use Composition API `useRouter()`/`useRoute()` 
+  - Warnings occur because components use Composition API `useRouter()`/`useRoute()`
   - Proper fix requires providing router in each test file (60+ test modifications)
   - All 60 frontend tests pass despite warnings - functionality unaffected
   - Decision: Accept as informational noise for MVP (can be addressed in refactor sprint)
