@@ -1,16 +1,32 @@
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import App from './App.vue'
 
+// Mock fetch globally
+global.fetch = vi.fn()
+
 describe('App', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+            ; (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({ status: 'ok' }),
+            })
+    })
+
     it('should mount and render the app title', () => {
         const wrapper = mount(App)
         expect(wrapper.find('h1').text()).toContain('Boeuf')
     })
 
+    it('should display Spotify authentication section', () => {
+        const wrapper = mount(App)
+        expect(wrapper.text()).toContain('Authentification Spotify')
+    })
+
     it('should display backend health status section', () => {
         const wrapper = mount(App)
-        expect(wrapper.text()).toContain('État du Backend')
+        expect(wrapper.text()).toContain('Santé du Backend')
     })
 
     it('should render shadcn-vue Button component', () => {
@@ -20,13 +36,18 @@ describe('App', () => {
         expect(button.text()).toContain('Actualiser')
     })
 
-    it('should call health check on mount', async () => {
-        const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    it('should call health check and auth status on mount', async () => {
         mount(App)
+        await flushPromises()
 
-        // Wait for onMounted to execute
-        await new Promise(resolve => setTimeout(resolve, 0))
+        // Should call both /api/health and /api/auth/status
+        expect(global.fetch).toHaveBeenCalledWith('/api/health')
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/status')
+    })
 
-        expect(fetchSpy).toHaveBeenCalledWith('/api/health')
+    it('should render AuthStatus component', () => {
+        const wrapper = mount(App)
+        expect(wrapper.findComponent({ name: 'AuthStatus' }).exists()).toBe(true)
     })
 })
+

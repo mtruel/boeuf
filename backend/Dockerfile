@@ -13,7 +13,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /backend ./cmd/boeuf-server
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates sqlite-libs
-WORKDIR /root/
+RUN mkdir -p /app/data
+WORKDIR /app
 COPY --from=build /backend .
 EXPOSE 8080
 CMD ["./backend"]

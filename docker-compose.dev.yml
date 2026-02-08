@@ -24,7 +24,7 @@ services:
       - /app/node_modules
     # Install dependencies if missing, then start Vite
     # Use pnpm to respect lockfile
-    command: sh -c "npm install -g pnpm && if [ ! -d node_modules ]; then pnpm install; fi && pnpm run dev -- --host"
+    command: sh -c "npm install -g pnpm && if [ ! -d node_modules ]; then pnpm install; fi && pnpm exec vite --host"
     environment:
       - CHOKIDAR_USEPOLLING=true # Often needed for Docker file watching
     ports:

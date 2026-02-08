@@ -2,9 +2,21 @@
     root * /usr/share/caddy
     file_server
 
-    # Reverse proxy for API
-    # Strips /api prefix before forwarding to backend
-    handle_path /api/* {
+    # CORS headers for production (if needed for separate frontend dev or mobile apps)
+    # Remove or restrict origins in production as needed
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+        Access-Control-Allow-Credentials "true"
+    }
+
+    # Reverse proxy for API and auth endpoints
+    handle /api/* {
+        reverse_proxy backend:8080
+    }
+
+    handle /auth/* {
         reverse_proxy backend:8080
     }
 
