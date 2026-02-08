@@ -16,6 +16,11 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/session/:sessionId',
+      name: 'session',
+      component: () => import('../views/SessionView.vue'),
+    },
+    {
       path: '/about',
       name: 'about',
       // route level code-splitting

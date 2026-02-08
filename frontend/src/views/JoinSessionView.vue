@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import LoginButton from '../components/LoginButton.vue'
 
 interface JoinSessionResponse {
@@ -17,6 +17,7 @@ const props = defineProps<{
 }>()
 
 const route = useRoute()
+const router = useRouter()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -52,11 +53,8 @@ async function joinSession(inviteToken: string) {
     const data: JoinSessionResponse = await response.json()
     sessionId.value = data.sessionId
 
-    // TODO: Redirect to session view when it's implemented
-    // For now, just show success message
-    if (import.meta.env.DEV) {
-      console.log('Successfully joined session:', data.sessionId)
-    }
+    // Redirect to session view
+    router.push({ name: 'session', params: { sessionId: data.sessionId } })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Erreur de connexion'
     if (import.meta.env.DEV) {

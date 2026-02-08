@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Restart Dev and Run Tests",
+			"type": "shell",
+			"command": "make dev-restart && make test"
+		}
+	]
+}

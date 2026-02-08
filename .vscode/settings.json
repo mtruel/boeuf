@@ -4,6 +4,8 @@
         "make": true,
         "npm test": true,
         "pnpm": true,
-        "npm run test:unit": true
+        "npm run test:unit": true,
+        "docker compose": true,
+        "timeout": true
     }
 }

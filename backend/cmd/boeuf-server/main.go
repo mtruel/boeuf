@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mathias/boeuf/internal/handlers"
 	"github.com/mathias/boeuf/internal/models"
+	"github.com/mathias/boeuf/internal/realtime"
 	"github.com/mathias/boeuf/internal/repository"
 	"github.com/mathias/boeuf/internal/session"
 	"github.com/mathias/boeuf/internal/spotify"
@@ -83,12 +84,22 @@ func main() {
 	// Initialize session store
 	sessionStore := session.NewStore(sessionKey, isProduction)
 
+	// Initialize WebSocket hub and start it
+	hub := realtime.NewHub()
+	go hub.Run()
+
 	// Initialize handlers
 	authHandler := handlers.NewSpotifyAuthHandler(sessionStore)
 	authHandler.SetTokenService(tokenService)
 	authStatusHandler := handlers.NewAuthStatusHandler(sessionStore, tokenRepo)
 	sessionHandler := handlers.NewSessionHandlerWithDuration(sessionStore, db, publicURL, sessionDuration)
 	sessionHandler.SetMaxActiveSessionsPerUser(maxActiveSessionsPerUser)
+	wsHandler := handlers.NewWebSocketHandler(hub, sessionStore, db)
+
+	// Configure hub to broadcast PARTICIPANT_LEFT on disconnection
+	hub.SetOnClientDisconnect(func(sessionID, userID string) {
+		wsHandler.BroadcastParticipantLeft(sessionID, userID)
+	})
 
 	// Initialize session cleanup
 	sessionCleaner := handlers.NewSessionCleaner(db)
@@ -122,6 +133,9 @@ func main() {
 	router.HandleFunc("/api/auth/status", authStatusHandler.Status)
 	router.HandleFunc("/api/sessions", sessionHandler.Create).Methods(http.MethodPost)
 	router.HandleFunc("/api/sessions/join", sessionHandler.Join).Methods(http.MethodPost)
+
+	// WebSocket route (requires authentication)
+	router.HandleFunc("/ws/{sessionId}", wsHandler.HandleConnection)
 
 	// Protected routes (require participant access control)
 	accessControl := handlers.NewAccessControlMiddleware(sessionStore, db)

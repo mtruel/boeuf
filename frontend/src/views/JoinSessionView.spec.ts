@@ -1,10 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import JoinSessionView from './JoinSessionView.vue'
 import { nextTick } from 'vue'
 
 // Mock fetch globally
 global.fetch = vi.fn()
+
+// Helper to create router mock
+const createMockRouter = () => {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
+      { path: '/session/:sessionId', name: 'session', component: { template: '<div>Session</div>' } }
+    ]
+  })
+}
 
 describe('JoinSessionView', () => {
   beforeEach(() => {
@@ -15,6 +27,9 @@ describe('JoinSessionView', () => {
     const wrapper = mount(JoinSessionView, {
       props: {
         token: 'test-token-123'
+      },
+      global: {
+        plugins: [createMockRouter()]
       }
     })
 
@@ -31,6 +46,9 @@ describe('JoinSessionView', () => {
     const wrapper = mount(JoinSessionView, {
       props: {
         token: 'test-token-123'
+      },
+      global: {
+        plugins: [createMockRouter()]
       }
     })
 
@@ -52,9 +70,20 @@ describe('JoinSessionView', () => {
     })
     global.fetch = mockFetch
 
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
+        { path: '/session/:sessionId', name: 'session', component: { template: '<div>Session</div>' } }
+      ]
+    })
+
     const wrapper = mount(JoinSessionView, {
       props: {
         token: 'valid-token'
+      },
+      global: {
+        plugins: [router]
       }
     })
 
@@ -68,9 +97,9 @@ describe('JoinSessionView', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
-      json: async () => ({ 
-        code: 'SESSION_NOT_FOUND', 
-        message: 'Invalid or expired invitation' 
+      json: async () => ({
+        code: 'SESSION_NOT_FOUND',
+        message: 'Invalid or expired invitation'
       })
     })
     global.fetch = mockFetch
@@ -78,6 +107,9 @@ describe('JoinSessionView', () => {
     const wrapper = mount(JoinSessionView, {
       props: {
         token: 'invalid-token'
+      },
+      global: {
+        plugins: [createMockRouter()]
       }
     })
 
@@ -91,9 +123,9 @@ describe('JoinSessionView', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
-      json: async () => ({ 
-        code: 'UNAUTHENTICATED', 
-        message: 'Authentication required' 
+      json: async () => ({
+        code: 'UNAUTHENTICATED',
+        message: 'Authentication required'
       })
     })
     global.fetch = mockFetch

@@ -60,19 +60,28 @@
         <p data-testid="expiration-date"><strong>Expire le:</strong> {{ formatExpirationDate(session.expiresAt) }}</p>
       </div>
 
-      <!-- Create Another Session Button -->
-      <button 
-        @click="resetComponent"
-        class="bg-gray-600 hover:bg-gray-700 text-white py-1 px-3 rounded text-sm transition-colors"
-      >
-        Créer une nouvelle session
-      </button>
+      <!-- Action Buttons -->
+      <div class="flex gap-2">
+        <button 
+          @click="goToSession"
+          class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded transition-colors"
+        >
+          🎵 Ouvrir la session
+        </button>
+        <button 
+          @click="resetComponent"
+          class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition-colors"
+        >
+          Créer une nouvelle session
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 interface SessionResponse {
   sessionId: string
@@ -86,6 +95,7 @@ interface ErrorResponse {
   message: string
 }
 
+const router = useRouter()
 const isLoading = ref(false)
 const error = ref<string>('')
 const session = ref<SessionResponse | null>(null)
@@ -164,6 +174,11 @@ const formatExpirationDate = (isoDate: string): string => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const goToSession = () => {
+  if (!session.value) return
+  router.push({ name: 'session', params: { sessionId: session.value.sessionId } })
 }
 
 const resetComponent = () => {
