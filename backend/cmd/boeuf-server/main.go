@@ -69,7 +69,7 @@ func main() {
 	// MVP: Using GORM AutoMigrate for simplicity.
 	// For a production-grade release later, we should switch to `goose` or `golang-migrate`
 	// to handle complex schema changes that GORM cannot automate.
-	if err := db.AutoMigrate(&models.SpotifyToken{}, &models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}); err != nil {
+	if err := db.AutoMigrate(&models.SpotifyToken{}, &models.Session{}, &models.SessionInvite{}, &models.SessionParticipant{}, &models.Event{}); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
@@ -97,6 +97,7 @@ func main() {
 	sessionHandler.SetSpotifyClient(spotifyClient)
 	sessionHandler.SetRealtimeHub(hub)
 	wsHandler := handlers.NewWebSocketHandler(hub, sessionStore, db)
+	playerHandler := handlers.NewPlayerHandler(sessionStore, db, spotifyClient, hub)
 
 	// Configure hub to broadcast PARTICIPANT_LEFT on disconnection
 	hub.SetOnClientDisconnect(func(sessionID, userID string) {
@@ -146,6 +147,13 @@ func main() {
 	// Sync endpoints (require participant access control)
 	router.Handle("/api/sessions/{sessionId}/me", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.GetParticipantMe))).Methods(http.MethodGet)
 	router.Handle("/api/sessions/{sessionId}/sync/start", accessControl.RequireParticipant(http.HandlerFunc(sessionHandler.StartSync))).Methods(http.MethodPost)
+
+	// Player control endpoints (require participant access control + synced state)
+	router.Handle("/api/sessions/{sessionId}/player/state", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.GetPlayerState))).Methods(http.MethodGet)
+	router.Handle("/api/sessions/{sessionId}/player/pause", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.PausePlayer))).Methods(http.MethodPost)
+	router.Handle("/api/sessions/{sessionId}/player/resume", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.ResumePlayer))).Methods(http.MethodPost)
+	router.Handle("/api/sessions/{sessionId}/player/next", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.NextTrack))).Methods(http.MethodPost)
+	router.Handle("/api/sessions/{sessionId}/player/seek", accessControl.RequireParticipant(http.HandlerFunc(playerHandler.SeekPlayer))).Methods(http.MethodPost)
 
 	// Enable CORS for development
 	handler := corsMiddleware(router)

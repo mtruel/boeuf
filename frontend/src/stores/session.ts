@@ -154,6 +154,13 @@ export const useSessionStore = defineStore('session', () => {
             // Update sessionStorage
             sessionStorage.setItem(`syncState_${sessionId.value}`, data.syncState)
 
+            // If server confirms we're synced, init player store
+            if (data.syncState === 'synced') {  // Use server response, not cached state
+                const { usePlayerStore } = await import('./player')
+                const playerStore = usePlayerStore()
+                await playerStore.init(sessionId.value)
+            }
+
         } catch (err) {
             // Silently fail - keep ready state
         }
@@ -196,6 +203,11 @@ export const useSessionStore = defineStore('session', () => {
 
             // Persist to sessionStorage
             sessionStorage.setItem(`syncState_${sessionId.value}`, 'synced')
+
+            // Initialize player store now that we're synced (Story 1.7)
+            const { usePlayerStore } = await import('./player')
+            const playerStore = usePlayerStore()
+            await playerStore.init(sessionId.value)
 
         } catch (err: any) {
             syncState.value = 'error'

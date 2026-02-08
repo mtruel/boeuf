@@ -176,3 +176,209 @@ func (c *Client) refreshToken(ctx context.Context, token *models.SpotifyToken) (
 func EncryptForTest(plaintext, key string) (string, error) {
 	return crypto.Encrypt(plaintext, key)
 }
+
+// PlayerState represents the current state of the Spotify player
+type PlayerState struct {
+	IsPlaying  bool   `json:"isPlaying"`
+	PositionMs int64  `json:"positionMs"`
+	TrackID    string `json:"trackId"`
+	TrackName  string `json:"trackName"`
+	Artist     string `json:"artist"`
+	Album      string `json:"album"`
+	DurationMs int64  `json:"durationMs"`
+	ImageURL   string `json:"imageUrl"`
+}
+
+// SpotifyPlayerResponse represents the response from GET /me/player
+type SpotifyPlayerResponse struct {
+	IsPlaying bool  `json:"is_playing"`
+	Progress  int64 `json:"progress_ms"`
+	Item      *struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Duration int64  `json:"duration_ms"`
+		Artists  []struct {
+			Name string `json:"name"`
+		} `json:"artists"`
+		Album struct {
+			Name   string `json:"name"`
+			Images []struct {
+				URL string `json:"url"`
+			} `json:"images"`
+		} `json:"album"`
+	} `json:"item"`
+}
+
+const spotifyAPIBase = "https://api.spotify.com/v1"
+
+// GetPlayerState retrieves the current player state from Spotify (Trust but Verify)
+func (c *Client) GetPlayerState(ctx context.Context, spotifyUserID string) (*PlayerState, error) {
+	accessToken, err := c.GetValidToken(ctx, spotifyUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", spotifyAPIBase+"/me/player", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create player state request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("player state request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if resp.StatusCode == http.StatusTooManyRequests {
+		retryAfter := 1
+		if h := resp.Header.Get("Retry-After"); h != "" {
+			if n, _ := strconv.Atoi(h); n > 0 {
+				retryAfter = n
+			}
+		}
+		return nil, &RateLimitedError{RetryAfterSeconds: retryAfter}
+	}
+
+	// No active device or no content playing
+	if resp.StatusCode == http.StatusNoContent {
+		return &PlayerState{
+			IsPlaying: false,
+		}, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("spotify player state error %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	var playerResp SpotifyPlayerResponse
+	if err := json.Unmarshal(body, &playerResp); err != nil {
+		return nil, fmt.Errorf("failed to parse player state: %w", err)
+	}
+
+	// Extract player state
+	state := &PlayerState{
+		IsPlaying:  playerResp.IsPlaying,
+		PositionMs: playerResp.Progress,
+	}
+
+	// Extract track info if available
+	if playerResp.Item != nil {
+		// Validate required fields exist
+		if playerResp.Item.ID == "" {
+			return nil, fmt.Errorf("missing track ID in Spotify response")
+		}
+		if playerResp.Item.Name == "" {
+			return nil, fmt.Errorf("missing track name in Spotify response (track: %s)", playerResp.Item.ID)
+		}
+
+		state.TrackID = "spotify:track:" + playerResp.Item.ID
+		state.TrackName = playerResp.Item.Name
+		state.DurationMs = playerResp.Item.Duration
+
+		// Validate duration - critical for seek validation
+		if state.DurationMs <= 0 {
+			return nil, fmt.Errorf("invalid track duration: %d (track: %s)", state.DurationMs, state.TrackID)
+		}
+
+		if len(playerResp.Item.Artists) > 0 {
+			state.Artist = playerResp.Item.Artists[0].Name
+		}
+
+		// Album may be nil for podcasts/local files
+		if playerResp.Item.Album.Name != "" {
+			state.Album = playerResp.Item.Album.Name
+		}
+		if len(playerResp.Item.Album.Images) > 0 {
+			state.ImageURL = playerResp.Item.Album.Images[0].URL
+		}
+	}
+
+	return state, nil
+}
+
+// Pause pauses playback on the user's active device
+func (c *Client) Pause(ctx context.Context, spotifyUserID string) error {
+	return c.playerCommand(ctx, spotifyUserID, "PUT", "/me/player/pause", nil)
+}
+
+// Resume resumes playback on the user's active device
+func (c *Client) Resume(ctx context.Context, spotifyUserID string) error {
+	return c.playerCommand(ctx, spotifyUserID, "PUT", "/me/player/play", nil)
+}
+
+// Next skips to the next track
+func (c *Client) Next(ctx context.Context, spotifyUserID string) error {
+	return c.playerCommand(ctx, spotifyUserID, "POST", "/me/player/next", nil)
+}
+
+// Seek seeks to a position in the current track
+func (c *Client) Seek(ctx context.Context, spotifyUserID string, positionMs int64) error {
+	endpoint := fmt.Sprintf("/me/player/seek?position_ms=%d", positionMs)
+	return c.playerCommand(ctx, spotifyUserID, "PUT", endpoint, nil)
+}
+
+// playerCommand executes a player control command (Pause, Resume, Next, Seek)
+func (c *Client) playerCommand(ctx context.Context, spotifyUserID, method, endpoint string, body io.Reader) error {
+	accessToken, err := c.GetValidToken(ctx, spotifyUserID)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, spotifyAPIBase+endpoint, body)
+	if err != nil {
+		return fmt.Errorf("failed to create player command request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("player command request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if resp.StatusCode == http.StatusTooManyRequests {
+		retryAfter := 1
+		if h := resp.Header.Get("Retry-After"); h != "" {
+			if n, _ := strconv.Atoi(h); n > 0 {
+				retryAfter = n
+			}
+		}
+		return &RateLimitedError{RetryAfterSeconds: retryAfter}
+	}
+
+	// Success cases: 204 No Content or 202 Accepted
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusAccepted {
+		return nil
+	}
+
+	// Handle specific errors
+	respBody, _ := io.ReadAll(resp.Body)
+	respBodyStr := string(respBody)
+
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return errors.New("SPOTIFY_NO_DEVICE")
+	case http.StatusForbidden:
+		return errors.New("SPOTIFY_FORBIDDEN")
+	case http.StatusBadGateway, http.StatusServiceUnavailable:
+		// Check if it's a "No active device" error
+		if strings.Contains(strings.ToLower(respBodyStr), "no active device") {
+			return errors.New("SPOTIFY_NO_ACTIVE_DEVICE")
+		}
+		return fmt.Errorf("SPOTIFY_UNAVAILABLE: %d %s", resp.StatusCode, respBodyStr)
+	default:
+		return fmt.Errorf("SPOTIFY_UNAVAILABLE: %d %s", resp.StatusCode, respBodyStr)
+	}
+}

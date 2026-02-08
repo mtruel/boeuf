@@ -18,6 +18,7 @@ export type MessageType =
     | 'PLAYER_PAUSED'
     | 'PLAYER_RESUMED'
     | 'TRACK_CHANGED'
+    | 'PLAYER_SEEKED'
     | 'QUEUE_UPDATED'
     | 'HOST_CHANGED'
     | 'WS_ERROR'
@@ -223,6 +224,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
         }
     }
 
+    // Alias for convenience
+    const registerHandler = onMessage
+
     /**
      * Send a message (for future client->server messages)
      * MVP: Not used yet, but prepared for future stories
@@ -248,6 +252,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
         connect,
         disconnect,
         onMessage,
+        registerHandler,
         send
     }
 })

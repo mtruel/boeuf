@@ -300,3 +300,147 @@ func (h *Hub) BroadcastToSession(sessionID string, msgType MessageType, payload 
 
 	return nil
 }
+
+// BroadcastPlayerPaused broadcasts PLAYER_PAUSED event to all session clients
+func (h *Hub) BroadcastPlayerPaused(sessionID string, userID string, playerState interface{}) int64 {
+	eventSeq := h.GetNextEventSeq(sessionID)
+
+	payload := PlayerPausedPayload{
+		UserID:    userID,
+		IsPlaying: false, // Always false for pause
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Extract player state if provided
+	if state, ok := playerState.(map[string]interface{}); ok {
+		if pos, ok := state["positionMs"].(int64); ok {
+			payload.PositionMs = pos
+		}
+		if track, ok := state["track"].(*NowPlayingInfo); ok {
+			payload.Track = track
+		}
+	}
+
+	msg, err := NewMessage(TypePlayerPaused, sessionID, eventSeq, payload)
+	if err != nil {
+		log.Printf("Failed to create PLAYER_PAUSED message: %v", err)
+		return eventSeq
+	}
+
+	msgBytes, _ := msg.Marshal()
+	h.Broadcast <- &BroadcastMessage{
+		SessionID: sessionID,
+		Message:   msgBytes,
+	}
+
+	return eventSeq
+}
+
+// BroadcastPlayerResumed broadcasts PLAYER_RESUMED event to all session clients
+func (h *Hub) BroadcastPlayerResumed(sessionID string, userID string, playerState interface{}) int64 {
+	eventSeq := h.GetNextEventSeq(sessionID)
+
+	payload := PlayerResumedPayload{
+		UserID:    userID,
+		IsPlaying: true, // Always true for resume
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Extract player state if provided
+	if state, ok := playerState.(map[string]interface{}); ok {
+		if pos, ok := state["positionMs"].(int64); ok {
+			payload.PositionMs = pos
+		}
+		if track, ok := state["track"].(*NowPlayingInfo); ok {
+			payload.Track = track
+		}
+	}
+
+	msg, err := NewMessage(TypePlayerResumed, sessionID, eventSeq, payload)
+	if err != nil {
+		log.Printf("Failed to create PLAYER_RESUMED message: %v", err)
+		return eventSeq
+	}
+
+	msgBytes, _ := msg.Marshal()
+	h.Broadcast <- &BroadcastMessage{
+		SessionID: sessionID,
+		Message:   msgBytes,
+	}
+
+	return eventSeq
+}
+
+// BroadcastTrackChanged broadcasts TRACK_CHANGED event to all session clients
+func (h *Hub) BroadcastTrackChanged(sessionID string, userID string, playerState interface{}) int64 {
+	eventSeq := h.GetNextEventSeq(sessionID)
+
+	payload := TrackChangedPayload{
+		UserID:    userID,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Extract player state if provided
+	if state, ok := playerState.(map[string]interface{}); ok {
+		if playing, ok := state["isPlaying"].(bool); ok {
+			payload.IsPlaying = playing
+		}
+		if pos, ok := state["positionMs"].(int64); ok {
+			payload.PositionMs = pos
+		}
+		if track, ok := state["track"].(*NowPlayingInfo); ok {
+			payload.Track = track
+		}
+	}
+
+	msg, err := NewMessage(TypeTrackChanged, sessionID, eventSeq, payload)
+	if err != nil {
+		log.Printf("Failed to create TRACK_CHANGED message: %v", err)
+		return eventSeq
+	}
+
+	msgBytes, _ := msg.Marshal()
+	h.Broadcast <- &BroadcastMessage{
+		SessionID: sessionID,
+		Message:   msgBytes,
+	}
+
+	return eventSeq
+}
+
+// BroadcastPlayerSeeked broadcasts PLAYER_SEEKED event to all session clients
+func (h *Hub) BroadcastPlayerSeeked(sessionID string, userID string, playerState interface{}) int64 {
+	eventSeq := h.GetNextEventSeq(sessionID)
+
+	payload := PlayerSeekedPayload{
+		UserID:    userID,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Extract player state if provided
+	if state, ok := playerState.(map[string]interface{}); ok {
+		if playing, ok := state["isPlaying"].(bool); ok {
+			payload.IsPlaying = playing
+		}
+		if pos, ok := state["positionMs"].(int64); ok {
+			payload.PositionMs = pos
+		}
+		if track, ok := state["track"].(*NowPlayingInfo); ok {
+			payload.Track = track
+		}
+	}
+
+	msg, err := NewMessage(TypePlayerSeeked, sessionID, eventSeq, payload)
+	if err != nil {
+		log.Printf("Failed to create PLAYER_SEEKED message: %v", err)
+		return eventSeq
+	}
+
+	msgBytes, _ := msg.Marshal()
+	h.Broadcast <- &BroadcastMessage{
+		SessionID: sessionID,
+		Message:   msgBytes,
+	}
+
+	return eventSeq
+}

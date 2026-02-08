@@ -13,6 +13,10 @@ const (
 	TypeParticipantJoined           MessageType = "PARTICIPANT_JOINED"
 	TypeParticipantLeft             MessageType = "PARTICIPANT_LEFT"
 	TypeParticipantSyncStateChanged MessageType = "PARTICIPANT_SYNC_STATE_CHANGED"
+	TypePlayerPaused                MessageType = "PLAYER_PAUSED"
+	TypePlayerResumed               MessageType = "PLAYER_RESUMED"
+	TypeTrackChanged                MessageType = "TRACK_CHANGED"
+	TypePlayerSeeked                MessageType = "PLAYER_SEEKED"
 	TypeWSError                     MessageType = "WS_ERROR"
 	TypeWSForbidden                 MessageType = "WS_FORBIDDEN"
 )
@@ -47,6 +51,9 @@ type NowPlayingInfo struct {
 	TrackID    string `json:"trackId"` // Spotify track URI
 	TrackName  string `json:"trackName"`
 	Artist     string `json:"artist"`
+	Album      string `json:"album"`
+	DurationMs int64  `json:"durationMs"` // Track duration in milliseconds
+	ImageURL   string `json:"imageUrl,omitempty"` // Album art URL (largest available)
 	IsPlaying  bool   `json:"isPlaying"`
 	PositionMs int64  `json:"positionMs"` // Current position in milliseconds
 }
@@ -69,6 +76,42 @@ type ParticipantSyncStateChangedPayload struct {
 	UserID    string `json:"userId"`
 	SyncState string `json:"syncState"` // "ready" or "synced"
 	Timestamp string `json:"timestamp"` // RFC3339 UTC
+}
+
+// PlayerPausedPayload for PLAYER_PAUSED events
+type PlayerPausedPayload struct {
+	UserID     string          `json:"userId"`     // Who triggered the action
+	IsPlaying  bool            `json:"isPlaying"`  // Should be false
+	PositionMs int64           `json:"positionMs"` // Current position
+	Track      *NowPlayingInfo `json:"track"`      // Current track info
+	Timestamp  string          `json:"timestamp"`  // RFC3339 UTC
+}
+
+// PlayerResumedPayload for PLAYER_RESUMED events
+type PlayerResumedPayload struct {
+	UserID     string          `json:"userId"`     // Who triggered the action
+	IsPlaying  bool            `json:"isPlaying"`  // Should be true
+	PositionMs int64           `json:"positionMs"` // Current position
+	Track      *NowPlayingInfo `json:"track"`      // Current track info
+	Timestamp  string          `json:"timestamp"`  // RFC3339 UTC
+}
+
+// TrackChangedPayload for TRACK_CHANGED events (skip/next)
+type TrackChangedPayload struct {
+	UserID     string          `json:"userId"`     // Who triggered the action
+	IsPlaying  bool            `json:"isPlaying"`  // Playback state
+	PositionMs int64           `json:"positionMs"` // Position in new track
+	Track      *NowPlayingInfo `json:"track"`      // New track info
+	Timestamp  string          `json:"timestamp"`  // RFC3339 UTC
+}
+
+// PlayerSeekedPayload for PLAYER_SEEKED events
+type PlayerSeekedPayload struct {
+	UserID     string          `json:"userId"`     // Who triggered the action
+	IsPlaying  bool            `json:"isPlaying"`  // Playback state
+	PositionMs int64           `json:"positionMs"` // New position
+	Track      *NowPlayingInfo `json:"track"`      // Current track info
+	Timestamp  string          `json:"timestamp"`  // RFC3339 UTC
 }
 
 // ErrorPayload for error messages

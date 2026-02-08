@@ -13,6 +13,7 @@ So that je comprends pourquoi les commandes échouent et je sais comment corrige
 Cette story regroupe les bug fixes identifiés lors de la session de test du 2026-01-30. Tous ces bugs concernent l'authentification, les erreurs de device Spotify, et la gestion des états invalides découverts post-implémentation des Stories 1-1 à 1-7.
 
 **Bugs Fixes:**
+
 - BUG #1: Commandes Player 503 - SPOTIFY_NO_DEVICE
 - BUG #2: Session Data Visible Après Logout
 - BUG #3: Session Page Accessible Sans Auth
@@ -121,6 +122,7 @@ Cette story regroupe les bug fixes identifiés lors de la session de test du 202
 - [ ] Backend: Pre-check Spotify device availability (AC 1)
   - [ ] Dans handler `/sync/start`, appeler `spotifyClient.GetAvailableDevices()` AVANT sync
   - [ ] Si `len(devices) == 0`, retourner 503 avec body:
+
     ```json
     {
       "code": "SPOTIFY_NO_DEVICE",
@@ -128,6 +130,7 @@ Cette story regroupe les bug fixes identifiés lors de la session de test du 202
       "requiresActiveDevice": true
     }
     ```
+
   - [ ] Si `devices` disponible, procéder normalement
   - [ ] Log device info pour debug: `device.Name`, `device.Type`, `device.IsActive`
 
@@ -172,6 +175,7 @@ Cette story regroupe les bug fixes identifiés lors de la session de test du 202
 
 - [ ] Frontend: Navigation guard auth check (AC 4, 5)
   - [ ] Créer `router/guards/auth.guard.ts`:
+
     ```typescript
     export const authGuard: NavigationGuard = (to, from, next) => {
       const authStore = useAuthStore()
@@ -192,11 +196,13 @@ Cette story regroupe les bug fixes identifiés lors de la session de test du 202
       next()
     }
     ```
+
   - [ ] Enregistrer dans `router/index.ts`: `router.beforeEach(authGuard)`
   - [ ] Implémenter auto-redirect après login (lire `route.query.redirect` ou `route.query.invite`)
 
 - [ ] Frontend: Global 401 interceptor (AC 6, 7)
   - [ ] Créer `api/interceptors/auth.interceptor.ts`:
+
     ```typescript
     let sessionExpiredToastShown = false
     
@@ -225,6 +231,7 @@ Cette story regroupe les bug fixes identifiés lors de la session de test du 202
       }
     )
     ```
+
   - [ ] Importer et activer dans `main.ts` ou `api/client.ts`
 
 - [ ] Frontend: Debounce multiple 401 toasts (AC 7)
@@ -277,12 +284,14 @@ interface ApiError {
 ### Toast UX Patterns
 
 **Device Error Toast (Special):**
+
 - Persistent (pas d'auto-dismiss)
 - Dual actions (Open Spotify + Retry)
 - Styling distinct (warning variant)
 - Icon: 🎵 ou speaker icon
 
 **Session Expired Toast (Standard):**
+
 - Auto-dismiss après 5s
 - Single action implicite (redirect déjà effectué)
 - Error variant
@@ -308,21 +317,25 @@ Auth callback check query params
 ### Multi-Tab Sync Consideration
 
 **Limitation actuelle:** Chaque tab a son propre store Pinia (pas de shared state).
+
 - Tab 1 logout → Tab 2 state reste "authenticated" jusqu'à prochaine requête API
 - Solution: 401 interceptor détecte et sync automatiquement
 
-**Future enhancement (pas MVP):** 
+**Future enhancement (pas MVP):**
+
 - Utiliser `BroadcastChannel` API pour sync logout entre tabs instantanément
 - Ou `localStorage` event listener cross-tab
 
 ### Spotify Device Detection
 
 **Endpoint Spotify:**
+
 ```
 GET https://api.spotify.com/v1/me/player/devices
 ```
 
 **Response sample:**
+
 ```json
 {
   "devices": [
@@ -338,6 +351,7 @@ GET https://api.spotify.com/v1/me/player/devices
 ```
 
 **Empty devices:**
+
 ```json
 {
   "devices": []
@@ -376,7 +390,7 @@ const retrySync = async () => {
 ## References
 
 - **Bug Report:** [test-session-bugs-2026-01-30.md](../action-items/test-session-bugs-2026-01-30.md)
-- **Related Stories:** 
+- **Related Stories:**
   - Story 1-2: Auth Spotify OAuth (login/logout base)
   - Story 1-6: Sas "Start Listening" (sync start endpoint)
   - Story 1-7: Synchronisation Play/Pause (player commands)

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { usePresenceStore } from '@/stores/presence'
+import PlayerControls from './PlayerControls.vue'
 
 const sessionStore = useSessionStore()
 const presenceStore = usePresenceStore()
@@ -62,12 +63,8 @@ const albumGradient = computed(() => {
                 <p class="track-artist">{{ nowPlaying?.artist || '' }}</p>
             </div>
 
-            <div class="playback-controls">
-                <!-- Future: Playback controls will be added in story 1.7 -->
-                <p class="playback-status">
-                    {{ nowPlaying?.isPlaying ? 'Playing' : 'Paused' }}
-                </p>
-            </div>
+            <!-- Player Controls (Story 1.7) -->
+            <PlayerControls />
         </div>
 
         <div class="empty-state" v-else>

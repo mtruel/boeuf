@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useRealtimeStore } from '@/stores/realtime'
 import { usePresenceStore } from '@/stores/presence'
 import { useSessionStore } from '@/stores/session'
+import { usePlayerStore } from '@/stores/player'
 import SessionAirlock from '@/components/SessionAirlock.vue'
 import SessionLive from '@/components/SessionLive.vue'
 
@@ -11,6 +12,7 @@ const route = useRoute()
 const realtimeStore = useRealtimeStore()
 const presenceStore = usePresenceStore()
 const sessionStore = useSessionStore()
+const playerStore = usePlayerStore()
 
 const sessionId = computed(() => route.params.sessionId as string)
 const currentUserId = ref<string | null>(null)
@@ -42,6 +44,7 @@ onMounted(async () => {
   sessionStore.initialize(sessionId.value, currentUserId.value)
   
   // Load sync state (may restore from sessionStorage)
+  // Note: playerStore.init() will be called after successful sync in sessionStore.startListening()
   await sessionStore.loadSyncState()
   
   // Connect WebSocket
