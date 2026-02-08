@@ -73,6 +73,23 @@ cp .env.example .env
 docker compose up
 ```
 
+## Déploiement automatisé (GitHub Actions + Watchtower)
+
+À chaque push sur `main` ou `dev`, les images Docker sont publiées sur GHCR :
+
+- `ghcr.io/<owner>/boeuf-backend`
+- `ghcr.io/<owner>/boeuf-frontend`
+
+Sur le homelab, utilisez `docker-compose.prod.yml` avec Watchtower :
+
+```bash
+export IMAGE_OWNER=<owner>
+export IMAGE_TAG=main
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Si vous suivez la branche `dev`, utilisez `IMAGE_TAG=dev`.
+
 ## Stack technique
 
 - **Frontend**: Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS v4 + shadcn-vue

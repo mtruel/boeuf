@@ -1,0 +1,50 @@
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${EXPOSE_PORT:-3000}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - frontend_dist:/usr/share/caddy
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - boeuf-network
+
+  frontend:
+    image: ghcr.io/${IMAGE_OWNER}/boeuf-frontend:${IMAGE_TAG:-main}
+    volumes:
+      - frontend_dist:/app/dist
+    networks:
+      - boeuf-network
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  backend:
+    image: ghcr.io/${IMAGE_OWNER}/boeuf-backend:${IMAGE_TAG:-main}
+    env_file:
+      - .env
+    environment:
+      - PORT=${PORT:-8080}
+      - SESSION_KEY=${SESSION_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - ENV=${ENV:-development}
+      - DATABASE_PATH=${DATABASE_PATH:-./data/boeuf.db}
+    volumes:
+      - backend_data:/app/data
+    networks:
+      - boeuf-network
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+networks:
+  boeuf-network:
+    driver: bridge
+
+volumes:
+  frontend_dist:
+  backend_data:
