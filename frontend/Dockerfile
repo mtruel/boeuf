@@ -1,12 +1,13 @@
-FROM node:22-alpine AS build
+FROM node:22-slim AS dev
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN pnpm install --frozen-lockfile
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+FROM dev AS build
 COPY . .
 RUN pnpm build
 
-FROM alpine:latest
+FROM alpine:latest AS prod
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 # Keep the container alive so the volume remains available

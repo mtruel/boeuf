@@ -1,0 +1,50 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: build 
+      # We target build stage or standard, but for watch we want rapid feedback.
+      # The standard Dockerfile compiles binary. 
+      # Rebuild action will trigger a full container rebuild/restart.
+    command: go run ./cmd/boeuf-server
+    develop:
+      watch:
+        - action: rebuild
+          path: ./backend
+          target: /app
+
+  frontend:
+    # Use the dev stage from our Dockerfile which has Node & pnpm installed
+    build:
+      context: ./frontend
+      target: dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    # Install dependencies if missing, then start Vite
+    # Use pnpm to respect lockfile
+    command: sh -c "npm install -g pnpm && if [ ! -d node_modules ]; then pnpm install; fi && pnpm run dev -- --host"
+    environment:
+      - CHOKIDAR_USEPOLLING=true # Often needed for Docker file watching
+    ports:
+      - "5173:5173" # Expose for direct access if needed
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend/src
+          target: /app/src
+          ignore:
+            - node_modules/
+        - action: sync
+          path: ./frontend/public
+          target: /app/public
+        - action: rebuild
+          path: ./frontend/package.json
+
+  caddy:
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile
+    depends_on:
+      - frontend
+      - backend

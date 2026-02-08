@@ -14,7 +14,9 @@ services:
       - boeuf-network
 
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      target: prod
     volumes:
       - frontend_dist:/app/dist
     networks:
@@ -25,7 +27,15 @@ services:
     env_file:
       - .env
     environment:
-      - PORT=8080
+      - PORT=${PORT:-8080}
+      - SESSION_KEY=${SESSION_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - ENV=${ENV:-development}
+      - DATABASE_PATH=${DATABASE_PATH:-./data/boeuf.db}
+    volumes:
+      - backend_data:/app/data
     networks:
       - boeuf-network
 
@@ -35,3 +45,4 @@ networks:
 
 volumes:
   frontend_dist:
+  backend_data:

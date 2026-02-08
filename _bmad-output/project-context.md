@@ -64,6 +64,11 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 - Les clients incluent `clientMsgId` pour idempotence/dédoublonnage.
 - Reconnexion: **snapshot + events since seq** (pas de “full refresh” implicite sans raison).
 - Spotify: pas de webhooks → polling + “Trust but Verify” (relire l’état après commande).
+**Database Migrations:**
+- **Stratégie MVP:** GORM AutoMigrate (simplifie dev/deploy)
+- Migration goose créée pour référence mais non utilisée: [backend/migrations/20260125000001_create_spotify_tokens.sql](backend/migrations/20260125000001_create_spotify_tokens.sql)
+- **Pourquoi AutoMigrate?** MVP rapide, moins de setup, migrations gérées par GORM
+- **Future:** Migrer vers goose si contrôle versioning SQL devient nécessaire (production multi-env)
 
 ### Testing Rules
 
@@ -90,6 +95,37 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 - 429 Spotify: respecter `Retry-After` + backoff + jitter.
 - `details` d’erreur doit rester stable (utile debug/validation), pas une dump arbitraire.
 - Secrets: refresh tokens Spotify chiffrés (AES-256-GCM) en DB; aucun secret persistant côté frontend.
+
+### OAuth & CORS Strategy
+
+**CORS Configuration (Dev vs Prod):**
+
+- **Dev (Docker Compose):** Backend CORS middleware permet `http://localhost:3000` (Caddy proxy)
+  - Dev workflow: `docker compose up -d --build` - stack complet (frontend build + backend + Caddy)
+  - Alternative: Vite dev server avec proxy (`pnpm dev`) - tests unitaires/composants uniquement
+  - **Important:** OAuth flow requiert stack Docker (Caddy :3000) - redirect URI Spotify ne peut pas pointer vers Vite dev
+- **Prod:** CORS géré par Caddy reverse proxy headers (à configurer selon domaine)
+- Frontend DOIT passer par Caddy (`:3000`) - accès direct backend (`:8080`) bloqué par CORS
+
+**Spotify OAuth Redirect URI:**
+
+- MUST match exactement `SPOTIFY_REDIRECT_URI` env var: `http://localhost:3000/auth/spotify/callback`
+- Caddy route `/auth/*` vers backend - pas de réécriture path
+- Spotify Dashboard: ajouter redirect URI exacte (protocole + domaine + port + path)
+- **Pourquoi pas :8080 direct?** OAuth exige redirect URI publique; backend interne au réseau Docker
+
+**Spotify Scopes Strategy:**
+
+- Scopes minimaux requis: `user-read-playback-state`, `user-read-currently-playing`, `user-modify-playback-state`
+- **Identité stable:** `user-read-email` (choisi) - fournit email unique et stable pour lier compte
+  - Alternative `user-read-private` donnerait country/subscription mais email suffit pour MVP
+  - Email utilisé comme `spotify_user_id` unique dans la DB
+- **Rationale:** MVP minimise scopes; email = identifiant stable sans données sensibles supplémentaires
+
+**Testing:**
+
+- E2E tests Playwright pointent vers `localhost:3000` (stack Docker complet)
+- Vite dev proxy `/auth` et `/api` vers backend pour dev local (si besoin)
 
 ## Defaults & Anti-Patterns
 
@@ -119,4 +155,35 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 - Garder ce fichier court (règles non-obvies uniquement).
 - Réviser périodiquement et supprimer les règles devenues évidentes.
 
-Last Updated: 2026-01-22
+Last Updated: 2026-01-25
+
+## Developer Workflow (Standardized)
+
+Pour réduire la friction, utilisez le `Makefile` à la racine pour toutes les opérations courantes.
+
+### Commandes Principales
+
+| Commande | Description | Contexte |
+|---|---|---|
+| `make watch` | **Humain Uniquement**. Lance l'environnement avec **Hot Reload** (Front+Back). **Bloquant**. | Développement |
+| `make dev-restart` | **Agent Friendly**. Rebuild et démarre les conteneurs en background. Utile pour appliquer des changements. | Développement |
+| `make test` | Lance tous les tests (Back + Front) dans Docker. | CI / Check |
+| `make test-backend` | Tests Go uniquement (`go test ./...`). | Backend |
+| `make test-frontend` | Tests Vue uniquement (`npm run test:unit`). | Frontend |
+| `make prod` | Lance l'environnement en mode production (build optimisé). | Staging |
+| `make logs` | Affiche un snapshot des logs (non bloquant). | Debug Agent |
+| `make watch-logs` | Affiche les logs en continu (bloquant). | Debug Humain |
+
+### Architecture de Developpement
+
+- **Frontend** : En mode dev, tourne sur une image Node avec Vite en mode HMR. Les changements dans `frontend/src` sont synchronisés instantanément.
+- **Backend** : En mode dev, le conteneur peut redémarrer (rebuild) à chaque changement de fichier Go (via `watch` ou `dev-restart`).
+- **Proxy** : `Caddyfile.dev` est utilisé pour router les requêtes vers le serveur de dev Vite (port 5173).
+
+### Règles pour l'IA
+
+1. **Ne pas deviner** les commandes npm ou go. Utiliser `make`.
+2. **Ne jamais utiliser `make watch`** (c'est une commande bloquante). Utiliser `make dev-restart`.
+3. Pour appliquer un changement de code : éditer les fichiers, puis `make dev-restart` (ou juste `make test` si TDD).
+4. Si un test échoue, utiliser `make test-backend` ou `make test-frontend` pour isoler.
+5. **Frontend Debugging** : Vous pouvez utiliser les outils Chrome DevTools (`mcp_chrome-devtoo_*`) pour inspecter le DOM, la console ou le réseau du frontend accessible sur `http://localhost:3000`.
