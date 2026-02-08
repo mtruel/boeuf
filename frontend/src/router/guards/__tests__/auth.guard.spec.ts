@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { authGuard, resetAuthCache } from '../auth.guard'
-import type { RouteLocationNormalized } from 'vue-router'
+import type { NavigationGuardNext, RouteLocationNormalized } from 'vue-router'
 
 // Mock dependencies
 vi.mock('@/composables/useToast', () => ({
@@ -12,12 +12,12 @@ vi.mock('@/composables/useToast', () => ({
 global.fetch = vi.fn()
 
 describe('authGuard (AC 4, 5)', () => {
-    let next: ReturnType<typeof vi.fn>
+    let next: NavigationGuardNext
 
     beforeEach(() => {
         vi.clearAllMocks()
         resetAuthCache() // Clear auth cache between tests
-        next = vi.fn()
+        next = vi.fn() as unknown as NavigationGuardNext
     })
 
     const createMockRoute = (path: string, params: Record<string, any> = {}): RouteLocationNormalized => ({

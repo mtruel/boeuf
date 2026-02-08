@@ -63,6 +63,7 @@ export interface NowPlayingInfo {
 // Participant joined event payload
 export interface ParticipantJoinedPayload {
     userId: string
+    displayName?: string
     role: 'host' | 'participant'
     timestamp: string // RFC3339
 }

@@ -92,6 +92,7 @@ export const usePresenceStore = defineStore('presence', () => {
             // Add new participant
             participants.value.set(payload.userId, {
                 userId: payload.userId,
+                displayName: payload.displayName || payload.userId,
                 role: payload.role,
                 syncState: 'ready', // Default to ready
                 connectionStatus: 'online',

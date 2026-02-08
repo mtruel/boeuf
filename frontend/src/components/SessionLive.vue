@@ -80,7 +80,7 @@ watch(trackId, () => {
                     v-if="albumArtUrl" 
                     :key="`${albumArtKey}-${albumArtUrl}`"
                     :src="albumArtUrl" 
-                    :alt="`${nowPlaying?.trackName} album art`"
+                    :alt="`${nowPlaying?.name} album art`"
                     class="album-image"
                     :class="{ 'paused': isPlayerPaused }"
                     @error="() => {}"
