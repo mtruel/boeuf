@@ -36,7 +36,7 @@ workflow_status:
   create-architecture: "_bmad-output/planning-artifacts/architecture.md"
   generate-project-context: "_bmad-output/project-context.md"
   create-epics-and-stories: required
-  test-design: optional
+  test-design: "_bmad-output/test-design-system.md"
   implementation-readiness: required
 
   # Phase 4: Implementation
