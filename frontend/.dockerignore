@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Test results
+test-results/
+playwright-report/
+coverage/
+
+# Documentation
+*.md
+
+# Docker
+Dockerfile*
+.dockerignore
+
+# Logs
+*.log

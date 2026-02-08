@@ -1,11 +1,24 @@
 FROM node:22-slim AS dev
 WORKDIR /app
+
+# Install pnpm globally with cache
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g pnpm
+
+# Copy dependency files first for better caching
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+# Install dependencies with cache mount
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 FROM dev AS build
+# Copy source code
 COPY . .
-RUN pnpm build
+
+# Build with cache
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm build
 
 FROM alpine:latest AS prod
 WORKDIR /app

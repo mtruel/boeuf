@@ -1,0 +1,37 @@
+# Build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go build cache
+.cache/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+
+# Test files (if you don't want them in build context)
+*_test.go
+
+# Local development files
+.env.local
+.env.development
+tmp/
+
+# Docker
+Dockerfile*
+.dockerignore
