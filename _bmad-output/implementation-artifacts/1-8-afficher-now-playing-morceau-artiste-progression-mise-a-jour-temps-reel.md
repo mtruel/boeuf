@@ -905,11 +905,11 @@ Generated in YOLO mode (fully automated) as part of Epic 1 completion, following
 
 **LOW Issues Fixed (Final Session - 2026-01-31):**
 
-5. ✅ **WebSocket origin check hardening**: Validate origin against `PUBLIC_URL` hostname
+1. ✅ **WebSocket origin check hardening**: Validate origin against `PUBLIC_URL` hostname
    - File: `backend/internal/handlers/websocket.go:20-62`
    - Dev mode: allow localhost, Prod mode: validate PUBLIC_URL
-   
-6. ✅ **Favicon badge implementation**: Canvas-based dynamic favicon generation
+
+2. ✅ **Favicon badge implementation**: Canvas-based dynamic favicon generation
    - File: `frontend/src/composables/useTabTitle.ts:37-79`
    - Design: Orange vinyl + green badge when synced
 

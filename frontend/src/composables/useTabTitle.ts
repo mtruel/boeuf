@@ -40,7 +40,7 @@ export function useTabTitle() {
     const updateFavicon = (synced: boolean) => {
         try {
             const link = getFaviconLink()
-            
+
             if (!synced) {
                 // No badge - use default favicon
                 link.href = '/favicon.ico'
@@ -52,7 +52,7 @@ export function useTabTitle() {
             canvas.width = 32
             canvas.height = 32
             const ctx = canvas.getContext('2d')
-            
+
             if (!ctx) return
 
             // Draw base circle (vinyl record style)

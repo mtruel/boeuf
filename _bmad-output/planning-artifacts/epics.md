@@ -346,7 +346,9 @@ So that je sache ce que le groupe écoute.
 
 Permettre de consulter et manipuler la file d’attente de manière partagée, avec propagation temps réel.
 
-### Story 2.1: Afficher la file d’attente partagée
+**Note (Story 1.10 Alignment):** Avec le modèle de rooms persistantes, la queue survit aux départs/rejoin des participants. La queue persiste tant que la room est active (LIVE ou STALE).
+
+### Story 2.1: Afficher la file d'attente partagée
 
 As a utilisateur,
 I want voir la queue partagée,
@@ -354,10 +356,13 @@ So that je comprenne ce qui va passer ensuite.
 
 **Acceptance Criteria:**
 
-**Given** un utilisateur dans une session
+**Given** un utilisateur dans une room (LIVE ou STALE)
 **When** il ouvre la vue queue
-**Then** l’UI affiche une liste d’items (au minimum: titre, artiste, durée)
+**Then** l'UI affiche une liste d'items (au minimum: titre, artiste, durée)
 **And** les données échangées respectent JSON camelCase
+**And** la queue reste visible même si la room est STALE (0 participants actifs)
+
+**Note:** API endpoint reste `/api/sessions/:id/queue` pour backward compatibility, mais conceptuellement il s'agit de la queue de la room.
 
 ### Story 2.2: Ajouter un titre à la queue (propagation temps réel)
 
@@ -367,14 +372,21 @@ So that je puisse contribuer à l’écoute.
 
 **Acceptance Criteria:**
 
-**Given** un participant sélectionne un titre (via UI ou via identifiant Spotify)
-**When** il demande l’ajout
-**Then** le serveur orchestre l’ajout côté Spotify (best-effort)
-**And** tous les clients voient l’item apparaître en ≤ 2s (NFR3)
+**Given** un participant actif (`is_active=true`) dans une room LIVE
+**When** il sélectionne un titre et demande l'ajout (via UI ou identifiant Spotify)
+**Then** le serveur orchestre l'ajout côté Spotify (best-effort)
+**And** tous les participants actifs voient l'item apparaître en ≤ 2s (NFR3)
+
+**Given** une room STALE (0 participants actifs) et un utilisateur rejoint
+**When** le premier participant ajoute un titre à la queue
+**Then** la room passe automatiquement de STALE → LIVE
+**And** l'ajout est orchestré normalement
 
 **Given** Spotify répond 429
-**When** l’ajout est tenté
-**Then** le serveur respecte `Retry-After` et expose un état “rate-limited” compréhensible au client
+**When** l'ajout est tenté
+**Then** le serveur respecte `Retry-After` et expose un état "rate-limited" compréhensible au client
+
+**Note:** Queue persiste avec la room - un utilisateur peut quitter et rejoindre sans perdre la queue existante.
 
 ### Story 2.3: Réordonner la queue (stratégie MVP compatible Spotify)
 
@@ -384,10 +396,17 @@ So that on puisse décider collectivement de l’ordre de lecture.
 
 **Acceptance Criteria:**
 
-**Given** la plateforme ne supporte pas nativement le réordonnancement de queue
-**When** l’utilisateur réordonne dans boeuf
-**Then** le serveur maintient un ordre “desired queue” partagé et converge au mieux avec Spotify
-**And** l’UI reflète l’ordre “boeuf” comme source de vérité pour la suite des morceaux
+**Given** un participant actif dans une room LIVE
+**And** la plateforme Spotify ne supporte pas nativement le réordonnancement de queue
+**When** l'utilisateur réordonne dans boeuf
+**Then** le serveur maintient un ordre "desired queue" partagé et converge au mieux avec Spotify
+**And** l'UI reflète l'ordre "boeuf" comme source de vérité pour la suite des morceaux
+
+**Given** une room STALE avec une queue existante
+**When** un utilisateur rejoint et visualise la queue
+**Then** l'ordre précédent est préservé (queue persiste avec la room)
+
+**Note:** La persistence des rooms (Story 1.10) améliore l'UX - les participants peuvent quitter/rejoindre sans perdre l'ordre de la queue.
 
 ### Story 2.4: Mettre à jour la queue à partir de la réalité Spotify (“Trust but Verify”)
 
@@ -397,88 +416,222 @@ So that l’UI ne dérive pas silencieusement.
 
 **Acceptance Criteria:**
 
-**Given** une session active
-**When** boeuf détecte un écart entre “desired queue” et l’état Spotify
-**Then** il publie un événement de resync et met à jour l’UI
-**And** les resync n’interrompent pas la lecture (pas de modals bloquantes)
+**Given** une room LIVE (has active participants avec `is_active=true`)
+**When** le serveur poll Spotify et détecte un écart entre "desired queue" et l'état Spotify réel
+**Then** il publie un événement de resync et met à jour l'UI pour tous les participants actifs
+**And** les resync n'interrompent pas la lecture (pas de modals bloquantes)
 
-## Epic 3: Gouvernance temps réel (host tournant + conflits)
+**Given** une room STALE (0 participants actifs)
+**When** le polling timer s'exécute
+**Then** le serveur NE poll PAS Spotify (pas de participants pour synchroniser)
+**And** le polling reprend automatiquement quand la room redevient LIVE (un participant rejoint)
 
-Rendre les actions multi-utilisateurs prévisibles via host tournant et arbitrage simple.
+**Note:** Le polling Spotify est désactivé pour les rooms STALE pour économiser les API calls. L'état de la queue est préservé en DB et reste consultable.
 
-### Story 3.1: Définir et diffuser l’état “host” de session
+## Epic 3: Sync Leadership & Playback Orchestration
 
-As a utilisateur,
-I want voir qui est host,
-So that je comprenne qui “pilote” la session.
+Établir un mécanisme de "sync leader" transparent qui détermine quelle source Spotify le serveur poll pour orchestrer la synchronisation playback de la room.
+
+**Key Principles:**
+
+- **Sync Leader = Technical Mechanism:** L'utilisateur dont le compte Spotify sert de source de vérité pour le polling serveur
+- **Transparent Assignment:** Changement automatique basé sur les actions, sans friction
+- **Discrete Visibility:** Badge visuel discret (pastille ●) dans la liste participants, SANS notifications/toasts
+- **Room Owner ≠ Sync Leader:** Concepts distincts (owner = permanent/manages room, sync leader = temporary/polling source)
+
+**Context (Story 1.10 Integration):**
+
+- Story 1.10 ajoute `created_by` (room owner) - permanent, visible
+- Epic 3 ajoute `sync_leader_user_id` - dynamique, badge discret seulement
+- Optimise Story 1.8 polling: au lieu de poller tous les participants, poll uniquement sync leader
+
+**Schema Addition:**
+
+```sql
+ALTER TABLE sessions ADD COLUMN sync_leader_user_id TEXT NULL;
+ALTER TABLE session_participants ADD COLUMN last_action_at TIMESTAMP NULL;
+```
+
+### Story 3.0: Initial Sync Leader Assignment
+
+As a backend system,
+I want automatically assign a sync leader when a room becomes LIVE,
+So that polling can begin immediately without ambiguity.
 
 **Acceptance Criteria:**
 
-**Given** une session active
-**When** un participant devient host
-**Then** un événement `HOST_CHANGED` est diffusé à tous
-**And** l’UI affiche clairement le host actuel
+**Given** une room STALE (0 participants actifs, `sync_leader_user_id = NULL`)
+**When** le premier participant rejoint la room
+**Then** ce participant devient automatiquement sync leader
+**And** `sync_leader_user_id` est set au `user_id` du participant
+**And** le serveur commence le polling Spotify sur ce user's account
+**And** room state passe STALE → LIVE
 
-### Story 3.2: “Qui agit devient host”
+**Given** un utilisateur crée une nouvelle room (Story 1.10)
+**When** le backend auto-join le créateur après création
+**Then** le créateur devient sync leader par défaut (premier participant actif)
 
-As a participant,
-I want devenir automatiquement host quand j’agis,
-So that la gouvernance reste fluide sans réglages manuels.
+**Given** un participant a `user_id == sync_leader_user_id`
+**When** la liste des participants est affichée dans l'UI
+**Then** une pastille ronde discrète (●) apparaît à côté du nom du sync leader
+**And** AUCUNE notification/toast n'explique le concept
+**And** la pastille est le SEUL indicateur visuel (pas de highlight, pas de section dédiée)
+
+### Story 3.1: Automatic Sync Leader Switch on Playback Action
+
+As a backend system,
+I want automatically switch sync leader to the user who takes playback actions,
+So that the polling source reflects the most active/relevant Spotify account.
 
 **Acceptance Criteria:**
 
-**Given** un participant envoie une action de lecture/queue acceptée
-**When** le serveur l’applique
-**Then** il met à jour le host vers ce participant
-**And** le changement est transparent (pas de prompt)
+**Given** User A est le sync leader actuel (`sync_leader_user_id = userA`)
+**And** User B prend une action playback (play, pause, seek, skip)
+**When** le backend traite l'action de User B avec succès
+**Then** `sync_leader_user_id` est automatiquement changé vers `userB`
+**And** `session_participants.last_action_at` est mis à jour pour User B
+**And** le polling Spotify switch immédiatement de User A account → User B account
+**And** AUCUNE notification n'est envoyée aux clients
 
-### Story 3.3: Failover host (déconnexion)
+**Given** le sync leader change de User A → User B
+**When** les clients reçoivent l'événement de state update
+**Then** la pastille ● disparaît de User A et apparaît à côté de User B dans la participant list
+**And** le changement est visuel seulement (pas de toast/modal)
 
-As a session,
-I want choisir un nouveau host si le host se déconnecte,
-So that la session continue sans interruption.
+**Given** User A est sync leader
+**When** User B ajoute un titre à la queue (Epic 2)
+**Then** `sync_leader_user_id` reste User A (AUCUN changement)
+**Note:** Queue actions n'impactent pas playback state source → pas de raison de changer polling target
+
+### Story 3.2: Sync Leader Failover on Disconnect
+
+As a backend system,
+I want select a new sync leader when the current sync leader disconnects,
+So that polling can continue seamlessly without interruption.
 
 **Acceptance Criteria:**
 
-**Given** le host perd sa connexion
-**When** le serveur le détecte (≤ 5s)
-**Then** un nouveau host est sélectionné automatiquement parmi les participants connectés
-**And** un `HOST_CHANGED` est diffusé
+**Given** User A est sync leader (`sync_leader_user_id = userA`)
+**And** il y a d'autres participants actifs dans la room (User B, User C)
+**When** User A se déconnecte (WebSocket close) OU fait POST `/api/sessions/:id/leave`
+**Then** le serveur détecte la perte en ≤ 5s (NFR8)
+**And** sélectionne automatiquement le participant avec le `last_action_at` le plus récent comme nouveau sync leader
+**And** `sync_leader_user_id` est mis à jour vers le nouvel élu
+**And** polling reprend immédiatement sur le nouveau sync leader
+
+**Given** le sync leader actuel se déconnecte
+**When** le serveur doit choisir un remplaçant
+**Then** la stratégie de sélection est: **dernier participant qui a agi** (via `last_action_at` DESC)
+**And** si aucun participant n'a `last_action_at` (tous nouveaux), prendre le premier par ordre alphabétique de `user_id`
+
+**Given** User A est sync leader ET le seul participant actif
+**When** User A se déconnecte ou leave
+**Then** room passe LIVE → STALE
+**And** `sync_leader_user_id = NULL`
+**And** polling Spotify est arrêté (pas de participants à synchroniser)
+
+**Given** une room STALE avec `sync_leader_user_id = NULL`
+**When** un nouveau participant rejoint (Story 3.0)
+**Then** ce participant devient sync leader automatiquement
+**And** polling reprend immédiatement
+
+**Given** le sync leader change due à déconnexion (User A → User B)
+**When** les participants restants reçoivent l'update
+**Then** la pastille ● se déplace vers User B dans la participant list
+**And** AUCUNE notification n'est affichée
+
+### Story 3.3: Polling Optimization - Single Source of Truth
+
+As a backend system,
+I want poll only the sync leader's Spotify account for playback state,
+So that API calls are optimized and state propagation is unambiguous.
+
+**Acceptance Criteria:**
+
+**Given** une room LIVE avec sync leader défini (`sync_leader_user_id = userA`)
+**When** le polling timer s'exécute (Story 1.8 - toutes les 5-10s)
+**Then** le serveur poll UNIQUEMENT le Spotify account de User A
+**And** appel API: `GET /me/player` avec access token de User A
+**And** les autres participants ne sont PAS pollés (réduction ~80% des API calls)
+
+**Given** le serveur reçoit playback state du sync leader
+**When** le state diffère de l'état précédent (track changed, position drift, etc.)
+**Then** broadcast événement `PLAYER_STATE_UPDATE` à TOUS les participants actifs
+**And** tous les clients se synchronisent sur cet état (Story 1.8 logic)
+
+**Migration from Story 1.8:**
+
+- Before: Poll tous les participants synced
+- After: Poll uniquement sync leader
+- Breaking change: Oui, mais amélioration (moins d'API calls, moins de risque rate limit)
 
 ### Story 3.4: Résolution de conflits concurrentiels (policy simple)
 
-As a participant,
-I want que deux actions simultanées soient arbitrées simplement,
-So that le système reste stable sans verrous lourds.
+As a backend system,
+I want resolve concurrent actions with a simple documented policy,
+So that the system remains stable without heavy locking.
 
 **Acceptance Criteria:**
 
 **Given** deux actions concurrentes arrivent au serveur quasi simultanément
-**When** elles sont reçues
-**Then** le serveur applique une policy documentée (ex: first-wins par ordre de réception)
-**And** chaque action génère un événement ordonné (event log + `eventSeq`) permettant d’auditer ce qui s’est passé
+**When** elles sont reçues (ex: User A pause, User B play)
+**Then** le serveur applique une policy **first-wins** par ordre de réception
+**And** première action reçue est traitée, seconde est appliquée après (pas rejetée)
 
-## Epic 4: Résilience session (déconnexion, reconnexion, resync)
+**Given** chaque action génère un événement
+**When** les événements sont diffusés
+**Then** chaque événement a un `eventSeq` monotone croissant par room
+**And** les clients peuvent auditer l'ordre exact des actions
 
-Assurer que la session survit aux coupures réseau et que les clients se resynchronisent automatiquement.
+**Given** deux users agissent simultanément
+**When** le serveur arbitre avec first-wins
+**Then** AUCUNE action n'est bloquée/rejetée
+**And** les deux actions sont appliquées séquentiellement
 
-### Story 4.1: Détection de déconnexion et état présence
+**Note:** Story 3.4 est orthogonale au concept de sync leader. Le sync leader détermine la SOURCE de polling, pas l'arbitrage des actions concurrentes
+
+## Epic 4: Résilience Room (déconnexion, reconnexion, resync)
+
+Assurer que la room survit aux coupures réseau et que les clients se resynchronisent automatiquement.
+
+**Context (Story 1.10 Integration):**
+
+- Story 1.10 introduces `session_participants.is_active` tracking
+- Disconnection updates `is_active = false` + sets `left_at` timestamp
+- Reconnection sets `is_active = true` again (same participant record)
+- Room lifecycle (LIVE/STALE/ARCHIVED) already handled in Story 1.10
+- Epic 4 focuses on **client-side resilience** and **state convergence** after network failures
+
+### Story 4.1: Détection de déconnexion et état présence (is_active tracking)
 
 As a utilisateur,
 I want que la présence reflète rapidement les déconnexions,
-So that je sache si quelqu’un est “vraiment là”.
+So that je sache si quelqu'un est "vraiment là".
 
 **Acceptance Criteria:**
 
 **Given** un participant perd le réseau
 **When** sa connexion WS est interrompue
-**Then** le serveur marque l’utilisateur comme déconnecté en ≤ 5s
-**And** diffuse un événement de présence à tous les participants
+**Then** le serveur détecte la perte en ≤ 5s (NFR8)
+**And** met à jour `session_participants.is_active = false` + `left_at = NOW()`
+**And** diffuse un événement `PARTICIPANT_LEFT` à tous les participants actifs restants
+
+**Given** le participant déconnecté était sync leader (Story 3.2)
+**When** `is_active = false` est appliqué
+**Then** le serveur déclenche sync leader failover automatiquement
+**And** sélectionne nouveau sync leader parmi participants où `is_active = true`
 
 **Given** un participant se déconnecte pendant une lecture en cours
-**When** l’événement est traité
-**Then** la lecture continue pour les autres participants (aucun arrêt forcé côté groupe)
-**And** l’UI indique que le participant est “offline”
+**When** l'événement est traité
+**Then** la lecture continue pour les autres participants actifs (aucun arrêt forcé)
+**And** l'UI indique que le participant est "offline" dans la participant list
+**And** la room reste LIVE tant qu'il y a ≥ 1 participant avec `is_active = true`
+
+**Given** le dernier participant actif se déconnecte
+**When** `is_active = false` pour tous les participants
+**Then** room passe LIVE → STALE (Story 1.10 AC5)
+**And** `sync_leader_user_id = NULL` (Story 3.2)
+**And** polling Spotify est arrêté
 
 ### Story 4.2: Reconnexion automatique côté client (WS) avec backoff
 
@@ -488,42 +641,50 @@ So that je ne doive pas rafraîchir la page.
 
 **Acceptance Criteria:**
 
-**Given** une perte WS temporaire
+**Given** une perte WS temporaire (< 24h depuis `left_at`)
 **When** le client tente de se reconnecter
-**Then** il applique un backoff progressif (avec jitter)
-**And** l’UI indique “Reconnecting…” sans bloquer le reste
+**Then** il applique un backoff progressif: 1s, 2s, 4s, 8s (max 30s) avec jitter
+**And** l'UI indique "Reconnecting…" sans bloquer le reste de l'interface
+**And** le bouton "Leave Room" reste accessible pendant reconnexion
+
+**Given** reconnexion WS réussie dans les 24h
+**When** le client envoie son `user_id` + `session_id` au serveur
+**Then** le serveur met à jour `session_participants.is_active = true` + `left_at = NULL`
+**And** diffuse événement `PARTICIPANT_JOINED` aux autres participants actifs
+**And** si la room était STALE, elle repasse LIVE (Story 1.10 AC4)
+
+**Given** reconnexion après > 24h depuis `left_at`
+**When** le client tente de rejoindre
+**Then** le serveur refuse la reconnexion automatique (participant record peut être archivé)
+**And** l'utilisateur doit rejoindre manuellement via invite link (Story 1.4)
 
 ### Story 4.3: Resync “snapshot + events since seq”
 
 As a participant reconnecté,
-I want récupérer l’état de session et rejouer les événements manquants,
-So that je converge vers l’état actuel sans ambiguïté.
+I want récupérer l'état de room et rejouer les événements manquants,
+So que je converge vers l'état actuel sans ambiguïté.
 
 **Acceptance Criteria:**
 
-**Given** un client se reconnecte avec un `lastEventSeq`
-**When** il rejoint le WS
-**Then** le serveur renvoie un snapshot + la liste des événements depuis `lastEventSeq`
-**And** le client applique ces événements dans l’ordre pour retrouver l’état courant
+**Given** un client se reconnecte avec un `lastEventSeq` mémorisé
+**When** il rejoint le WS après reconnexion
+**Then** le serveur renvoie:
 
-**Given** une reconnexion après coupure réseau
+- Room snapshot: `{ room_state, participants[], current_track, queue[], sync_leader_user_id }`
+- Events depuis `lastEventSeq`: `[{ eventSeq, type, payload, timestamp }]`
+**And** le client applique ces événements dans l'ordre pour retrouver l'état courant
+
+**Given** `lastEventSeq` est trop ancien (events purgés/archivés)
+**When** le serveur ne peut pas fournir tous les events
+**Then** il renvoie un snapshot complet + flag `full_resync = true`
+**And** le client reset son état local et applique uniquement le snapshot
+
+**Given** une reconnexion après coupure réseau temporaire (< 5min)
 **When** le client retrouve la connectivité
 **Then** la resynchronisation complète (snapshot + events + convergence) se fait en ≤ 10s (NFR9)
+**And** l'UI repasse de "Reconnecting…" → état normal avec données à jour
 
-### Story 4.4: Quitter la session et expiration des sessions inactives
-
-As a utilisateur,
-I want quitter une session et laisser expirer les sessions inactives,
-So that la data reste propre et les liens ne vivent pas éternellement.
-
-**Acceptance Criteria:**
-
-**Given** un participant clique “Quitter”
-**When** l’action est confirmée
-**Then** il est retiré de la session et la présence est mise à jour
-**And** une session inactive expire au plus tard après 24h (NFR7)
-
-### Story 4.5: Déconnecter Spotify (révoquer tokens côté serveur)
+### Story 4.4: Déconnecter Spotify (révoquer tokens côté serveur)
 
 As a utilisateur,
 I want déconnecter mon compte Spotify,
@@ -540,6 +701,9 @@ So that je puisse arrêter de donner accès à boeuf.
 **When** il tente une action de lecture/queue
 **Then** l’API répond avec un code d’erreur stable (ex: `SPOTIFY_NOT_CONNECTED`)
 **And** l’UI affiche un message actionnable (ex: “Reconnecter Spotify”)
+**Note:** Story 4.4 est orthogonale au room lifecycle (Story 1.10). Un user peut disconnect Spotify tout en restant participant actif d'une room (mais ne peut plus agir sur playback/queue).
+
+**Note:** Story "Quitter la room et expiration" est maintenant couverte par Story 1.10 AC3 (leave), AC5 (STALE state), AC7 (manual archive/delete). Epic 4 se concentre sur **client resilience** uniquement.
 
 ## Epic 5: Confiance & qualité MVP (observabilité, erreurs, accessibilité)
 
