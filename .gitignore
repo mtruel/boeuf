@@ -11,3 +11,9 @@ backend/boeuf-server.exe
 *.db-shm
 *.db-wal
 **/.pnpm-store/**
+
+# Coverage artifacts
+backend/coverage.out
+
+# Local tool config
+opencode.jsonc
