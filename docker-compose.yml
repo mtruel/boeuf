@@ -1,0 +1,37 @@
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${EXPOSE_PORT:-3000}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - frontend_dist:/usr/share/caddy
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - boeuf-network
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - frontend_dist:/app/dist
+    networks:
+      - boeuf-network
+
+  backend:
+    build: ./backend
+    env_file:
+      - .env
+    environment:
+      - PORT=8080
+    networks:
+      - boeuf-network
+
+networks:
+  boeuf-network:
+    driver: bridge
+
+volumes:
+  frontend_dist:

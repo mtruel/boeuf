@@ -80,7 +80,9 @@ _Ce fichier est un guide concis et “LLM-friendly” des règles à respecter. 
 
 ### Development Workflow Rules
 
-- Respecter les frontières `frontend/` / `backend/` / `deploy/`.
+- Respecter les frontières `frontend/` / `backend/` / `deploy/` (domaines de responsabilité).
+  - Note : fichiers d'infrastructure (`docker-compose.yml`, `Caddyfile`, `.env.example`) sont à la racine pour ergonomie
+  - Le dossier `deploy/` contient la documentation de déploiement
 - Garder le contrat REST/WS minimal dans un endroit unique (éviter les duplications divergentes).
 
 ### Critical Don't-Miss Rules

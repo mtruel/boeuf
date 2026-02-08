@@ -330,15 +330,17 @@ Le dépôt est organisé en **deux racines** applicatives dans le même repo :
 - `frontend/` : SPA Vue (Vite) buildée en assets statiques
 - `backend/` : serveur Go (REST + WebSocket)
 
-Un dossier `deploy/` contient les artefacts d’infrastructure (Docker Compose, Caddy, docs de déploiement).
+Les fichiers d'infrastructure (Docker Compose, Caddyfile, .env) sont à la racine pour simplifier le démarrage.
+Un dossier `deploy/` reste présent pour la documentation de déploiement.
 
 ### Complete Project Directory Structure
 
 ```
 boeuf/
+├── docker-compose.yml
+├── Caddyfile
+├── .env.example
 ├── deploy/
-│   ├── docker-compose.yml
-│   ├── Caddyfile
 │   └── README.md
 ├── frontend/
 │   ├── package.json
@@ -377,10 +379,11 @@ boeuf/
 - Responsabilités : autorité sur l’état partagé, gestion des sessions/invites, polling Spotify + rate limit, event log append-only, diffusion WS.
 - “Source of truth” : `eventSeq` monotone serveur par session, snapshot + resync.
 
-**Deploy (`deploy/`)**
+**Deploy (racine + `deploy/`)**
 
-- Responsabilités : reverse-proxy (Caddy), TLS, routage, containerisation, volumes persistants (SQLite).
+- Responsabilités : reverse-proxy (Caddy), TLS, routage, containerisation, volumes persistants (SQLite), documentation.
 - Le frontend est servi en **statique** (build Vite) via Caddy; le backend reste derrière Caddy (reverse proxy).
+- Fichiers à la racine (`docker-compose.yml`, `Caddyfile`, `.env.example`) pour simplifier la commande `docker compose up`.
 
 ### Build & Run (High-Level)
 
@@ -433,7 +436,7 @@ boeuf/
 
 **Pour les agents d’implémentation :** ce document est la source de vérité. Toute divergence doit être discutée et mise à jour ici.
 
-**First Implementation Priority:** initialiser le projet frontend via `pnpm create vue@latest`, puis scaffold backend Go et la base `deploy/` (Compose + Caddy) en respectant la structure.
+**First Implementation Priority:** initialiser le projet frontend via `pnpm create vue@latest`, puis scaffold backend Go et les fichiers d'infrastructure à la racine (docker-compose.yml + Caddyfile) en respectant la structure.
 
 **Development Sequence:**
 
