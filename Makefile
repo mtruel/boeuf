@@ -3,7 +3,7 @@
 COMPOSE_FILE_PROD := -f docker-compose.yml
 COMPOSE_FILE_DEV  := -f docker-compose.yml -f docker-compose.dev.yml
 
-.PHONY: help watch dev-restart prod build down logs test test-backend test-frontend clean
+.PHONY: help watch dev-restart prod build down logs test test-backend test-frontend test-quick clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -36,15 +36,19 @@ watch-logs: ## Follow logs (blocking)
 
 test: test-backend test-frontend ## Run all tests
 
+test-quick: ## Run all tests without rebuilding (faster, use after first build)
+	@echo "Running All Tests (Quick Mode - No Rebuild)..."
+	@$(MAKE) test-backend
+	@$(MAKE) test-frontend
+
 test-backend: ## Run Backend tests (Go)
 	@echo "Running Backend Tests..."
-	docker compose $(COMPOSE_FILE_DEV) run --rm --build backend go test ./... -v
+	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps backend go test ./... -v
 
 test-frontend: ## Run Frontend tests (Vitest)
 	@echo "Running Frontend Tests..."
-	# We use the dev configuration to ensure node/npm/pnpm is available
-	# Use --run to disable watch mode for CI/Check
-	docker compose $(COMPOSE_FILE_DEV) run --rm frontend sh -c "npm install -g pnpm && pnpm install && pnpm exec vitest --run"
+	# Run tests using the built dev container with all deps pre-installed
+	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps frontend sh -c "pnpm run test:unit --run"
 
 clean: ## Remove artifacts and volumes
 	docker compose down -v

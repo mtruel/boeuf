@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { Button } from '@/components/ui/button'
 import AuthStatus from '@/components/AuthStatus.vue'
+import CreateSessionComponent from '@/components/CreateSessionComponent.vue'
 
 const healthStatus = ref<'loading' | 'ok' | 'error'>('loading')
 const backendData = ref<any>(null)
@@ -62,6 +63,12 @@ onMounted(() => {
             Actualiser
           </Button>
         </div>
+      </section>
+
+      <!-- Session Creation Section -->
+      <section class="flex flex-col gap-3">
+        <h2 class="text-lg font-semibold">Session</h2>
+        <CreateSessionComponent />
       </section>
     </main>
 
