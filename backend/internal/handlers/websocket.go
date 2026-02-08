@@ -4,6 +4,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -18,10 +21,43 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// In production, Caddy handles CORS and origin validation
-		// In development, allow localhost
-		// For MVP: allow all origins (Caddy will restrict in prod)
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // No origin header (e.g., native clients)
+		}
+
+		// Development: allow localhost
+		if os.Getenv("ENV") != "production" {
+			if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+				return true
+			}
+		}
+
+		// Production: validate against PUBLIC_URL
+		publicURL := os.Getenv("PUBLIC_URL")
+		if publicURL == "" {
+			log.Printf("[WebSocket] WARNING: PUBLIC_URL not set, allowing all origins")
+			return true
+		}
+
+		parsedPublic, err := url.Parse(publicURL)
+		if err != nil {
+			log.Printf("[WebSocket] ERROR: Invalid PUBLIC_URL: %v", err)
+			return false
+		}
+
+		parsedOrigin, err := url.Parse(origin)
+		if err != nil {
+			log.Printf("[WebSocket] ERROR: Invalid Origin: %v", err)
+			return false
+		}
+
+		// Compare hostnames
+		allowed := parsedOrigin.Hostname() == parsedPublic.Hostname()
+		if !allowed {
+			log.Printf("[WebSocket] REJECTED: Origin %s does not match PUBLIC_URL %s", origin, publicURL)
+		}
+		return allowed
 	},
 }
 
@@ -163,6 +199,9 @@ func (h *WebSocketHandler) sendInitialSnapshot(client *realtime.Client) error {
 				TrackID:    sess.BaselineTrackID,
 				TrackName:  sess.BaselineTrackName,
 				Artist:     sess.BaselineArtist,
+				Album:      "", // Album not stored separately in baseline
+				DurationMs: sess.BaselineDurationMs,
+				ImageURL:   sess.BaselineImageURL,
 				IsPlaying:  sess.BaselineIsPlaying,
 				PositionMs: sess.BaselinePositionMs,
 			}

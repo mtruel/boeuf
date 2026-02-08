@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { usePlayerStore } from '@/stores/player'
+import { usePlayerProgress } from '@/composables/usePlayerProgress'
 import { Play, Pause, SkipForward } from 'lucide-vue-next'
 
 const playerStore = usePlayerStore()
+const { currentPositionMs, currentPositionFormatted } = usePlayerProgress()
 
 // Computed states
 const isPlaying = computed(() => playerStore.isPlaying)
 const isLoading = computed(() => playerStore.isLoading)
 const hasTrack = computed(() => playerStore.hasTrack)
 const track = computed(() => playerStore.track)
-const positionMs = computed(() => playerStore.positionMs)
 const error = computed(() => playerStore.error)
+
+// Use interpolated position from usePlayerProgress (AC 8: real-time interpolation)
+const positionMs = currentPositionMs
+const positionFormatted = currentPositionFormatted
 
 // Computed: Friendly error message
 const friendlyError = computed(() => {
@@ -35,6 +40,7 @@ const nextTrack = async () => {
 const handleSeek = (event: Event) => {
     const target = event.target as HTMLInputElement
     const newPositionMs = parseInt(target.value, 10)
+    // AC 9: Validation is done on backend (reject if positionMs > durationMs)
     playerStore.seekTo(newPositionMs)
 }
 
@@ -98,7 +104,7 @@ const formatTime = (ms: number): string => {
 
         <!-- Position slider (optional MVP) -->
         <div v-if="hasTrack && track" class="progress-container">
-            <span class="time-display">{{ formatTime(positionMs) }}</span>
+            <span class="time-display">{{ positionFormatted }}</span>
             <input
                 type="range"
                 :min="0"

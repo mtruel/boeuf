@@ -137,6 +137,9 @@ type Hub struct {
 	// Callback when client disconnects (for PARTICIPANT_LEFT broadcast)
 	onClientDisconnect func(sessionID, userID string)
 
+	// Callback when client connects (for polling start, etc.)
+	onClientConnect func(sessionID, userID string)
+
 	// Mutex for thread-safe access
 	mu sync.RWMutex
 }
@@ -162,6 +165,11 @@ func NewHub() *Hub {
 // SetOnClientDisconnect sets the callback function for client disconnections
 func (h *Hub) SetOnClientDisconnect(callback func(sessionID, userID string)) {
 	h.onClientDisconnect = callback
+}
+
+// SetOnClientConnect sets the callback function for client connections
+func (h *Hub) SetOnClientConnect(callback func(sessionID, userID string)) {
+	h.onClientConnect = callback
 }
 
 // Run starts the hub's main loop
@@ -195,6 +203,11 @@ func (h *Hub) registerClient(client *Client) {
 
 	// Log registration (reduced verbosity for production)
 	log.Printf("WebSocket client registered: session=%s, user=%s", client.SessionID, client.UserID)
+
+	// Call connect callback if registered
+	if h.onClientConnect != nil {
+		h.onClientConnect(client.SessionID, client.UserID)
+	}
 }
 
 // unregisterClient removes a client from the hub
@@ -433,6 +446,42 @@ func (h *Hub) BroadcastPlayerSeeked(sessionID string, userID string, playerState
 	msg, err := NewMessage(TypePlayerSeeked, sessionID, eventSeq, payload)
 	if err != nil {
 		log.Printf("Failed to create PLAYER_SEEKED message: %v", err)
+		return eventSeq
+	}
+
+	msgBytes, _ := msg.Marshal()
+	h.Broadcast <- &BroadcastMessage{
+		SessionID: sessionID,
+		Message:   msgBytes,
+	}
+
+	return eventSeq
+}
+
+// BroadcastPlayerStateUpdate broadcasts PLAYER_STATE_UPDATE event to all session clients
+func (h *Hub) BroadcastPlayerStateUpdate(sessionID string, playerState interface{}) int64 {
+	eventSeq := h.GetNextEventSeq(sessionID)
+
+	payload := PlayerStateUpdatePayload{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Extract player state if provided
+	if state, ok := playerState.(map[string]interface{}); ok {
+		if playing, ok := state["isPlaying"].(bool); ok {
+			payload.IsPlaying = playing
+		}
+		if pos, ok := state["positionMs"].(int64); ok {
+			payload.PositionMs = pos
+		}
+		if track, ok := state["track"].(*NowPlayingInfo); ok {
+			payload.Track = track
+		}
+	}
+
+	msg, err := NewMessage(TypePlayerStateUpdate, sessionID, eventSeq, payload)
+	if err != nil {
+		log.Printf("Failed to create PLAYER_STATE_UPDATE message: %v", err)
 		return eventSeq
 	}
 

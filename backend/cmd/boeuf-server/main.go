@@ -88,6 +88,9 @@ func main() {
 	hub := realtime.NewHub()
 	go hub.Run()
 
+	// Initialize PlayerPoller for continuous player state sync
+	playerPoller := session.NewPlayerPoller(db, spotifyClient, hub, 5*time.Second)
+
 	// Initialize handlers
 	authHandler := handlers.NewSpotifyAuthHandler(sessionStore)
 	authHandler.SetTokenService(tokenService)
@@ -99,9 +102,20 @@ func main() {
 	wsHandler := handlers.NewWebSocketHandler(hub, sessionStore, db)
 	playerHandler := handlers.NewPlayerHandler(sessionStore, db, spotifyClient, hub)
 
-	// Configure hub to broadcast PARTICIPANT_LEFT on disconnection
+	// Configure hub to start/stop polling based on participant presence
+	hub.SetOnClientConnect(func(sessionID, userID string) {
+		if !playerPoller.IsPolling(sessionID) {
+			playerPoller.StartSessionPolling(sessionID)
+		}
+	})
+
+	// Configure hub to broadcast PARTICIPANT_LEFT on disconnection + stop polling
 	hub.SetOnClientDisconnect(func(sessionID, userID string) {
 		wsHandler.BroadcastParticipantLeft(sessionID, userID)
+		clients := hub.GetSessionClients(sessionID)
+		if len(clients) == 0 {
+			playerPoller.StopSessionPolling(sessionID)
+		}
 	})
 
 	// Initialize session cleanup

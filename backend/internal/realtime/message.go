@@ -17,6 +17,7 @@ const (
 	TypePlayerResumed               MessageType = "PLAYER_RESUMED"
 	TypeTrackChanged                MessageType = "TRACK_CHANGED"
 	TypePlayerSeeked                MessageType = "PLAYER_SEEKED"
+	TypePlayerStateUpdate           MessageType = "PLAYER_STATE_UPDATE"
 	TypeWSError                     MessageType = "WS_ERROR"
 	TypeWSForbidden                 MessageType = "WS_FORBIDDEN"
 )
@@ -52,7 +53,7 @@ type NowPlayingInfo struct {
 	TrackName  string `json:"trackName"`
 	Artist     string `json:"artist"`
 	Album      string `json:"album"`
-	DurationMs int64  `json:"durationMs"` // Track duration in milliseconds
+	DurationMs int64  `json:"durationMs"`         // Track duration in milliseconds
 	ImageURL   string `json:"imageUrl,omitempty"` // Album art URL (largest available)
 	IsPlaying  bool   `json:"isPlaying"`
 	PositionMs int64  `json:"positionMs"` // Current position in milliseconds
@@ -110,6 +111,14 @@ type PlayerSeekedPayload struct {
 	UserID     string          `json:"userId"`     // Who triggered the action
 	IsPlaying  bool            `json:"isPlaying"`  // Playback state
 	PositionMs int64           `json:"positionMs"` // New position
+	Track      *NowPlayingInfo `json:"track"`      // Current track info
+	Timestamp  string          `json:"timestamp"`  // RFC3339 UTC
+}
+
+// PlayerStateUpdatePayload for PLAYER_STATE_UPDATE events (polling updates)
+type PlayerStateUpdatePayload struct {
+	IsPlaying  bool            `json:"isPlaying"`  // Playback state
+	PositionMs int64           `json:"positionMs"` // Current position
 	Track      *NowPlayingInfo `json:"track"`      // Current track info
 	Timestamp  string          `json:"timestamp"`  // RFC3339 UTC
 }

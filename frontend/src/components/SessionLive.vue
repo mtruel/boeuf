@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { usePresenceStore } from '@/stores/presence'
+import { usePlayerStore } from '@/stores/player'
+import { useTabTitle } from '@/composables/useTabTitle'
 import PlayerControls from './PlayerControls.vue'
 
 const sessionStore = useSessionStore()
 const presenceStore = usePresenceStore()
+const playerStore = usePlayerStore()
+
+// AC 7: Initialize tab title management
+useTabTitle()
+
+// AC 3: Track change transition animation state
+const albumArtKey = ref(0)
 
 // Computed
 const nowPlaying = computed(() => sessionStore.nowPlaying)
 const participantList = computed(() => presenceStore.participantList)
 const hasNowPlaying = computed(() => nowPlaying.value !== null)
+const isPlayerPaused = computed(() => !playerStore.isPlaying && hasNowPlaying.value)
 
 /**
  * Get album art image - uses Spotify API image URL from backend
@@ -32,6 +42,14 @@ const albumGradient = computed(() => {
     }
     return 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)'
 })
+
+// Watch for track changes to trigger animation
+const trackId = computed(() => nowPlaying.value?.trackId)
+watch(trackId, () => {
+    // AC 3: Trigger cross-fade animation by incrementing key
+    // This causes Vue to re-mount the image element, triggering CSS transitions
+    albumArtKey.value++
+})
 </script>
 
 <template>
@@ -46,13 +64,15 @@ const albumGradient = computed(() => {
 
         <!-- Now Playing Section -->
         <div class="now-playing-section" v-if="hasNowPlaying">
-            <div class="album-art">
-                <!-- Album art with fallback (AC#2) -->
+            <div class="album-art" :class="{ 'paused': isPlayerPaused }">
+                <!-- Album art with fallback (AC#2, AC#3 cross-fade transition, AC#4 paused state) -->
                 <img 
                     v-if="albumArtUrl" 
+                    :key="`${albumArtKey}-${albumArtUrl}`"
                     :src="albumArtUrl" 
                     :alt="`${nowPlaying?.trackName} album art`"
                     class="album-image"
+                    :class="{ 'paused': isPlayerPaused }"
                     @error="() => {}"
                 />
                 <div v-else class="album-placeholder">♪</div>
@@ -63,7 +83,7 @@ const albumGradient = computed(() => {
                 <p class="track-artist">{{ nowPlaying?.artist || '' }}</p>
             </div>
 
-            <!-- Player Controls (Story 1.7) -->
+            <!-- Player Controls (Story 1.7, AC 8, AC 9) -->
             <PlayerControls />
         </div>
 
@@ -137,6 +157,19 @@ const albumGradient = computed(() => {
     .live-container {
         animation: none;
     }
+
+    .album-art {
+        transition: none;
+    }
+
+    .album-image {
+        animation: none;
+        transition: none;
+    }
+
+    .status-dot {
+        animation: none;
+    }
 }
 
 .status-bar {
@@ -195,12 +228,37 @@ const albumGradient = computed(() => {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    transition: filter 0.3s ease-out;
+}
+
+/* AC 4: Paused state - dim the container */
+.album-art.paused {
+    filter: grayscale(50%);
 }
 
 .album-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* AC 3: Cross-fade transition for track changes (300ms) */
+    animation: albumFadeIn 0.3s ease-out;
+    opacity: 1;
+    transition: opacity 0.3s ease-out;
+}
+
+@keyframes albumFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* AC 4: Paused state visual (dimmed album image) */
+.album-image.paused {
+    opacity: 0.7;
 }
 
 .album-placeholder {
