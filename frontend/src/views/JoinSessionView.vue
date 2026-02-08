@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LoginButton from '../components/LoginButton.vue'
+import { apiFetch } from '@/api/client'
 
 interface JoinSessionResponse {
   sessionId: string
@@ -29,7 +30,7 @@ async function joinSession(inviteToken: string) {
   error.value = null
 
   try {
-    const response = await fetch('/api/sessions/join', {
+    const response = await apiFetch('/api/sessions/join', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

@@ -34,7 +34,7 @@ const handleStartListening = () => {
 }
 
 const handleRetry = () => {
-    sessionStore.retry()
+    sessionStore.retryWithBackoff()
 }
 </script>
 

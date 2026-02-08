@@ -82,6 +82,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiFetch } from '@/api/client'
 
 interface SessionResponse {
   sessionId: string
@@ -106,7 +107,7 @@ const createSession = async () => {
   error.value = ''
   
   try {
-    const response = await fetch('/api/sessions', {
+    const response = await apiFetch('/api/sessions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

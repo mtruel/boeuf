@@ -124,12 +124,12 @@ describe('SessionAirlock.vue', () => {
         sessionStore.error = 'SPOTIFY_NOT_CONNECTED'
         await wrapper.vm.$nextTick()
 
-        vi.spyOn(sessionStore, 'retry')
+        vi.spyOn(sessionStore, 'retryWithBackoff')
 
         const retryButton = wrapper.find('.btn-retry')
         await retryButton.trigger('click')
 
-        expect(sessionStore.retry).toHaveBeenCalled()
+        expect(sessionStore.retryWithBackoff).toHaveBeenCalled()
     })
 
     it('displays specific error messages for different error codes', async () => {

@@ -55,6 +55,7 @@ onUnmounted(() => {
   realtimeStore.disconnect()
   presenceStore.clear()
   sessionStore.clear()
+  playerStore.reset()
 })
 </script>
 

@@ -19,6 +19,7 @@ export type MessageType =
     | 'PLAYER_RESUMED'
     | 'TRACK_CHANGED'
     | 'PLAYER_SEEKED'
+    | 'PLAYER_STATE_UPDATE'
     | 'QUEUE_UPDATED'
     | 'HOST_CHANGED'
     | 'WS_ERROR'
@@ -44,6 +45,7 @@ export interface SessionSnapshotPayload {
 
 export interface ParticipantInfo {
     userId: string
+    displayName: string // Spotify user display name
     role: 'host' | 'participant'
     syncState: 'ready' | 'synced'
     lastSeenAt: string // RFC3339

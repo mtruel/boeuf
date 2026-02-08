@@ -36,6 +36,7 @@ export function usePlayerProgress() {
     const lastServerPositionMs = ref(0)
     const lastServerUpdateAt = ref<number | null>(null)
     const isPlaying = ref(false)
+    const lastEndSyncAt = ref<number | null>(null)
 
     // Animation frame ID for cleanup
     let animationFrameId: number | null = null
@@ -176,7 +177,25 @@ export function usePlayerProgress() {
                 interpolatedPositionMs.value = pos
                 lastServerPositionMs.value = pos
                 lastServerUpdateAt.value = Date.now()
+                lastEndSyncAt.value = null
             }
+        }
+    )
+
+    // If we hit the end of a track while playing, force a state refresh
+    watch(
+        () => currentPositionMs.value,
+        (positionMs) => {
+            const duration = playerStore.currentTrack?.durationMs || 0
+            if (!isPlaying.value || duration === 0) return
+            if (positionMs < duration) return
+
+            const now = Date.now()
+            if (lastEndSyncAt.value && now - lastEndSyncAt.value < 2000) {
+                return
+            }
+            lastEndSyncAt.value = now
+            playerStore.refreshPlayerState()
         }
     )
 

@@ -179,6 +179,7 @@ export const usePresenceStore = defineStore('presence', () => {
         initialize,
         getParticipant,
         isOnline,
-        clear
+        clear,
+        $reset: clear // Alias for Pinia compatibility
     }
 })

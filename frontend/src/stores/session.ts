@@ -10,6 +10,9 @@ import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
 import { useRealtimeStore } from './realtime'
 import type { WSMessage } from './realtime'
+import { useToast } from '@/composables/useToast'
+import { apiFetch } from '@/api/client'
+import { isDeviceError, type ApiError } from '@/types/api'
 
 export type SyncState = 'ready' | 'syncing' | 'synced' | 'error'
 
@@ -45,6 +48,10 @@ export const useSessionStore = defineStore('session', () => {
     const realtimeStore = useRealtimeStore()
     const initialized: Ref<boolean> = ref(false)
     const unregisterHandlers: Array<() => void> = []
+
+    // Retry logic state (AC 8)
+    const RETRY_DELAYS = [2000, 4000, 8000] // 2s, 4s, 8s
+    const retryCount = ref(0)
 
     // Computed
     const isReady = computed(() => syncState.value === 'ready')
@@ -99,7 +106,7 @@ export const useSessionStore = defineStore('session', () => {
         }
 
         try {
-            const response = await fetch(`/api/sessions/${sessionId.value}`, {
+            const response = await apiFetch(`/api/sessions/${sessionId.value}`, {
                 credentials: 'include'
             })
 
@@ -134,13 +141,13 @@ export const useSessionStore = defineStore('session', () => {
 
         try {
             // Check sessionStorage first for quick restore
-            const cached = sessionStorage.getItem(`syncState_${sessionId.value}`)
+            const cached = sessionStorage.getItem(`boeuf_syncState_${sessionId.value}`)
             if (cached === 'synced') {
                 syncState.value = 'synced'
             }
 
             // Confirm with server
-            const response = await fetch(`/api/sessions/${sessionId.value}/me`, {
+            const response = await apiFetch(`/api/sessions/${sessionId.value}/me`, {
                 credentials: 'include'
             })
 
@@ -152,7 +159,7 @@ export const useSessionStore = defineStore('session', () => {
             syncState.value = data.syncState === 'synced' ? 'synced' : 'ready'
 
             // Update sessionStorage
-            sessionStorage.setItem(`syncState_${sessionId.value}`, data.syncState)
+            sessionStorage.setItem(`boeuf_syncState_${sessionId.value}`, data.syncState)
 
             // If server confirms we're synced, init player store
             if (data.syncState === 'synced') {  // Use server response, not cached state
@@ -182,7 +189,7 @@ export const useSessionStore = defineStore('session', () => {
         error.value = null
 
         try {
-            const response = await fetch(`/api/sessions/${sessionId.value}/sync/start`, {
+            const response = await apiFetch(`/api/sessions/${sessionId.value}/sync/start`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -191,7 +198,37 @@ export const useSessionStore = defineStore('session', () => {
             })
 
             if (!response.ok) {
-                const errorData = await response.json()
+                const errorData: ApiError = await response.json()
+
+                // Handle specific device error (AC 2) - type-safe check
+                if (isDeviceError(errorData)) {
+                    syncState.value = 'ready' // Stay in ready state for retry
+                    error.value = errorData.code
+
+                    const toast = useToast()
+                    toast.custom(
+                        'No Active Spotify Device',
+                        'Please start playback in Spotify (Web Player, Desktop, or Mobile) and try again.',
+                        {
+                            duration: Infinity, // Don't auto-dismiss
+                            action: {
+                                label: 'Open Spotify',
+                                onClick: () => {
+                                    window.open('https://open.spotify.com', '_blank')
+                                }
+                            },
+                            cancel: {
+                                label: 'Retry',
+                                onClick: () => {
+                                    toast.dismiss()
+                                    retryWithBackoff()
+                                }
+                            }
+                        }
+                    )
+                    return
+                }
+
                 throw new Error(errorData.code || 'SYNC_FAILED')
             }
 
@@ -202,12 +239,16 @@ export const useSessionStore = defineStore('session', () => {
             nowPlaying.value = data.nowPlaying || null
 
             // Persist to sessionStorage
-            sessionStorage.setItem(`syncState_${sessionId.value}`, 'synced')
+            sessionStorage.setItem(`boeuf_syncState_${sessionId.value}`, 'synced')
 
             // Initialize player store now that we're synced (Story 1.7)
             const { usePlayerStore } = await import('./player')
             const playerStore = usePlayerStore()
             await playerStore.init(sessionId.value)
+
+            // Show success toast
+            const toast = useToast()
+            toast.success("Synced! You're now listening together.")
 
         } catch (err: any) {
             syncState.value = 'error'
@@ -216,10 +257,37 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     /**
-     * Retry after error
+     * Retry after error with exponential backoff (AC 8)
+     */
+    async function retryWithBackoff() {
+        const toast = useToast()
+
+        if (retryCount.value >= 3) {
+            toast.error('Unable to sync. Please ensure Spotify is playing.')
+            retryCount.value = 0
+            return
+        }
+
+        const delay = RETRY_DELAYS[retryCount.value]
+        retryCount.value++
+
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, delay))
+
+        // Retry startListening
+        await startListening()
+
+        // Reset counter on success
+        if (syncState.value === 'synced') {
+            retryCount.value = 0
+        }
+    }
+
+    /**
+     * Retry after error (simple retry, no backoff)
      */
     function retry() {
-        return startListening()
+        return retryWithBackoff()
     }
 
     /**
@@ -228,7 +296,7 @@ export const useSessionStore = defineStore('session', () => {
     function clear() {
 
         if (sessionId.value) {
-            sessionStorage.removeItem(`syncState_${sessionId.value}`)
+            sessionStorage.removeItem(`boeuf_syncState_${sessionId.value}`)
         }
 
         sessionId.value = null
@@ -258,6 +326,7 @@ export const useSessionStore = defineStore('session', () => {
         syncState,
         error,
         nowPlaying,
+        retryCount, // Expose for testing (HIGH-3)
 
         // Computed
         isReady,
@@ -271,6 +340,7 @@ export const useSessionStore = defineStore('session', () => {
         loadSyncState,
         startListening,
         retry,
+        retryWithBackoff,
         clear
     }
 })

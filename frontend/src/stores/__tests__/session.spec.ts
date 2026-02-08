@@ -5,6 +5,12 @@ import { useSessionStore } from '../session'
 // Mock fetch globally
 global.fetch = vi.fn()
 
+vi.mock('@/stores/player', () => ({
+    usePlayerStore: () => ({
+        init: vi.fn()
+    })
+}))
+
 describe('Session Store', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
@@ -105,21 +111,32 @@ describe('Session Store', () => {
     })
 
     it('should retry after error', async () => {
+        vi.useFakeTimers()
+
         const store = useSessionStore()
         store.initialize('test-session', 'test-user')
         store.syncState = 'error'
         store.error = 'Test error'
 
-        // Mock successful retry
-        global.fetch = vi.fn().mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ syncState: 'synced', nowPlaying: null })
-        } as Response)
+        const client = await import('@/api/client')
+        const mockSuccessResponse = new Response(
+            JSON.stringify({ syncState: 'synced', nowPlaying: null }),
+            { status: 200 }
+        )
+        const apiFetchSpy = vi
+            .spyOn(client, 'apiFetch')
+            .mockResolvedValue(mockSuccessResponse)
 
-        await store.retry()
+        const retryPromise = store.retry()
 
+        await vi.advanceTimersByTimeAsync(2000)
+        await retryPromise
+
+        expect(apiFetchSpy).toHaveBeenCalled()
         expect(store.syncState).toBe('synced')
         expect(store.error).toBe(null)
+
+        vi.useRealTimers()
     })
 
     // AC#3: Refresh sans restart - persistance d'état
@@ -132,29 +149,32 @@ describe('Session Store', () => {
             const store = useSessionStore()
             store.initialize('session-123', 'user-456')
 
-            global.fetch = vi.fn().mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({
-                    syncState: 'synced',
-                    nowPlaying: {
-                        trackId: 'spotify:track:123',
-                        trackName: 'Test Song',
-                        artist: 'Test Artist',
-                        isPlaying: true,
-                        positionMs: 0,
-                        durationMs: 180000
-                    }
-                })
-            } as Response)
+            const client = await import('@/api/client')
+            vi.spyOn(client, 'apiFetch').mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        syncState: 'synced',
+                        nowPlaying: {
+                            trackId: 'spotify:track:123',
+                            trackName: 'Test Song',
+                            artist: 'Test Artist',
+                            isPlaying: true,
+                            positionMs: 0,
+                            durationMs: 180000
+                        }
+                    }),
+                    { status: 200 }
+                )
+            )
 
             await store.startListening()
 
-            const cached = sessionStorage.getItem('syncState_session-123')
+            const cached = sessionStorage.getItem('boeuf_syncState_session-123')
             expect(cached).toBe('synced')
         })
 
         it('should restore syncState from sessionStorage on loadSyncState', async () => {
-            sessionStorage.setItem('syncState_session-123', 'synced')
+            sessionStorage.setItem('boeuf_syncState_session-123', 'synced')
 
             const store = useSessionStore()
             store.initialize('session-123', 'user-456')
@@ -171,16 +191,22 @@ describe('Session Store', () => {
         })
 
         it('should verify server state takes precedence over cache', async () => {
-            sessionStorage.setItem('syncState_session-123', 'synced')
+            sessionStorage.setItem('boeuf_syncState_session-123', 'synced')
 
             const store = useSessionStore()
             store.initialize('session-123', 'user-456')
 
-            // Server returns "ready" (user rejoined or left)
-            global.fetch = vi.fn().mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ syncState: 'ready' })
-            } as Response)
+            const client = await import('@/api/client')
+            vi.spyOn(client, 'apiFetch')
+                .mockResolvedValueOnce(
+                    new Response(JSON.stringify({ syncState: 'ready' }), { status: 200 })
+                )
+                .mockResolvedValueOnce(
+                    new Response(
+                        JSON.stringify({ sessionId: 'session-123', nowPlaying: null }),
+                        { status: 200 }
+                    )
+                )
 
             await store.loadSyncState()
 
@@ -190,7 +216,7 @@ describe('Session Store', () => {
 
         it('should not return to Sas after refresh if was synced', async () => {
             // Simulate user synced and refreshing
-            sessionStorage.setItem('syncState_session-123', 'synced')
+            sessionStorage.setItem('boeuf_syncState_session-123', 'synced')
 
             const store = useSessionStore()
             store.initialize('session-123', 'user-456')
@@ -207,8 +233,8 @@ describe('Session Store', () => {
         })
 
         it('should handle multiple session IDs with separate cache keys', async () => {
-            sessionStorage.setItem('syncState_session-1', 'synced')
-            sessionStorage.setItem('syncState_session-2', 'ready')
+            sessionStorage.setItem('boeuf_syncState_session-1', 'synced')
+            sessionStorage.setItem('boeuf_syncState_session-2', 'ready')
 
             const store1 = useSessionStore()
             store1.initialize('session-1', 'user-1')
@@ -233,13 +259,13 @@ describe('Session Store', () => {
         })
 
         it('should clear sessionStorage on clear()', () => {
-            sessionStorage.setItem('syncState_session-123', 'synced')
+            sessionStorage.setItem('boeuf_syncState_session-123', 'synced')
             const store = useSessionStore()
             store.initialize('session-123', 'user-456')
 
             store.clear()
 
-            expect(sessionStorage.getItem('syncState_session-123')).toBeNull()
+            expect(sessionStorage.getItem('boeuf_syncState_session-123')).toBeNull()
         })
 
         it('should handle API errors gracefully', async () => {

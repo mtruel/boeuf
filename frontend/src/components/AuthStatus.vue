@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import LoginButton from './LoginButton.vue'
+import { useSessionStore } from '@/stores/session'
+import { usePlayerStore } from '@/stores/player'
+import { usePresenceStore } from '@/stores/presence'
+import { useRealtimeStore } from '@/stores/realtime'
+import { resetAuthCache } from '@/router/guards/auth.guard'
 
 interface AuthStatus {
   authenticated: boolean
   spotifyUserId?: string
 }
+
+const emit = defineEmits<{
+  (event: 'auth-changed', authenticated: boolean): void
+}>()
 
 const authStatus = ref<AuthStatus | null>(null)
 const loading = ref(true)
@@ -24,8 +33,10 @@ async function fetchAuthStatus() {
     }
 
     authStatus.value = await response.json()
+    emit('auth-changed', !!authStatus.value?.authenticated)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Erreur de connexion'
+    emit('auth-changed', false)
     if (import.meta.env.DEV) {
       console.error('Failed to fetch auth status:', e)
     }
@@ -46,6 +57,21 @@ async function logout() {
     if (!response.ok) {
       throw new Error(`Logout failed: ${response.status}`)
     }
+
+    // Clear all stores (AC 3)
+    const sessionStore = useSessionStore()
+    const playerStore = usePlayerStore()
+    const presenceStore = usePresenceStore()
+    const realtimeStore = useRealtimeStore()
+    
+    sessionStore.clear()
+    playerStore.$reset()
+    presenceStore.$reset()
+    realtimeStore.disconnect()
+    resetAuthCache()
+
+    authStatus.value = { authenticated: false }
+    emit('auth-changed', false)
 
     // Refresh auth status after successful logout
     await fetchAuthStatus()

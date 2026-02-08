@@ -21,23 +21,14 @@ test.describe('Spotify OAuth Authentication', () => {
     })
 
     test('should redirect to Spotify when clicking login button', async ({ page, context }) => {
-        // Listen for navigation to Spotify
-        const navigationPromise = page.waitForEvent('framenavigated')
-
         await page.goto('/')
 
         // Click the "Connecter Spotify" button
         const loginButton = page.locator('button:has-text("Connecter Spotify")')
         await loginButton.click()
 
-        // Wait for navigation
-        await navigationPromise
-
-        // Verify we've been redirected to /auth/spotify/start or Spotify's auth page
-        const currentUrl = page.url()
-        expect(
-            currentUrl.includes('/auth/spotify/start') || currentUrl.includes('accounts.spotify.com')
-        ).toBeTruthy()
+        await page.waitForURL(/\/auth\/spotify\/start|accounts\.spotify\.com/)
+        expect(page.url()).toMatch(/\/auth\/spotify\/start|accounts\.spotify\.com/)
     })
 
     test('should display authenticated state when user is connected', async ({ page }) => {

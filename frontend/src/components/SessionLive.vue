@@ -16,17 +16,27 @@ useTabTitle()
 // AC 3: Track change transition animation state
 const albumArtKey = ref(0)
 
-// Computed
-const nowPlaying = computed(() => sessionStore.nowPlaying)
+// Computed - Use playerStore.track as source of truth for current playback
+const nowPlaying = computed(() => playerStore.track)
 const participantList = computed(() => presenceStore.participantList)
 const hasNowPlaying = computed(() => nowPlaying.value !== null)
 const isPlayerPaused = computed(() => !playerStore.isPlaying && hasNowPlaying.value)
 
 /**
+ * Format artist names for display
+ */
+const artistNames = computed(() => {
+    if (!nowPlaying.value?.artist) {
+        return ''
+    }
+    return nowPlaying.value.artist
+})
+
+/**
  * Get album art image - uses Spotify API image URL from backend
  */
 const albumArtUrl = computed(() => {
-    // Use imageUrl from nowPlaying if available
+    // Use imageUrl from playerStore track if available
     if (nowPlaying.value?.imageUrl) {
         return nowPlaying.value.imageUrl
     }
@@ -44,7 +54,7 @@ const albumGradient = computed(() => {
 })
 
 // Watch for track changes to trigger animation
-const trackId = computed(() => nowPlaying.value?.trackId)
+const trackId = computed(() => nowPlaying.value?.id)
 watch(trackId, () => {
     // AC 3: Trigger cross-fade animation by incrementing key
     // This causes Vue to re-mount the image element, triggering CSS transitions
@@ -70,7 +80,7 @@ watch(trackId, () => {
                     v-if="albumArtUrl" 
                     :key="`${albumArtKey}-${albumArtUrl}`"
                     :src="albumArtUrl" 
-                    :alt="`${nowPlaying?.trackName} album art`"
+                    :alt="`${nowPlaying?.name} album art`"
                     class="album-image"
                     :class="{ 'paused': isPlayerPaused }"
                     @error="() => {}"
@@ -79,8 +89,8 @@ watch(trackId, () => {
             </div>
 
             <div class="track-info">
-                <h2 class="track-name">{{ nowPlaying?.trackName || 'No track playing' }}</h2>
-                <p class="track-artist">{{ nowPlaying?.artist || '' }}</p>
+                <h2 class="track-name">{{ nowPlaying?.name || 'No track playing' }}</h2>
+                <p class="track-artist">{{ artistNames }}</p>
             </div>
 
             <!-- Player Controls (Story 1.7, AC 8, AC 9) -->
@@ -109,12 +119,12 @@ watch(trackId, () => {
                     }"
                 >
                     <div class="participant-avatar">
-                        {{ participant.userId.charAt(0).toUpperCase() }}
+                        {{ participant.displayName.charAt(0).toUpperCase() }}
                     </div>
 
                     <div class="participant-info">
                         <p class="participant-name">
-                            {{ participant.userId }}
+                            {{ participant.displayName }}
                             <span v-if="participant.role === 'host'" class="host-badge">Host</span>
                         </p>
                         <p class="participant-status">

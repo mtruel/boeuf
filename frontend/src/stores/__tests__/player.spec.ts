@@ -36,8 +36,8 @@ describe('Player Store', () => {
                     isPlaying: true,
                     positionMs: 30000,
                     track: {
-                        id: 'track_1',
-                        name: 'Test Track',
+                        trackId: 'track_1',
+                        trackName: 'Test Track',
                         artist: 'Test Artist',
                         durationMs: 180000
                     }
@@ -49,7 +49,8 @@ describe('Player Store', () => {
 
         expect(store.sessionId).toBe('sess_123')
         expect(store.isPlaying).toBe(true)
-        expect(store.positionMs).toBe(30000)
+        expect(store.positionMs).toBeGreaterThanOrEqual(30000)
+        expect(store.positionMs).toBeLessThanOrEqual(30010)
         expect(store.track?.name).toBe('Test Track')
     })
 
@@ -57,7 +58,8 @@ describe('Player Store', () => {
         const store = usePlayerStore()
         store.init('sess_123')
         store.isPlaying = true
-        store.positionMs = 12345
+        store.lastServerPositionMs = 12345
+        store.lastServerUpdateAt = new Date()
         store.track = {
             id: 'track_1',
             name: 'Test Track',
@@ -164,8 +166,8 @@ describe('Player Store', () => {
             })
         )
 
-        // No optimistic update - state stays same until WS event
-        expect(store.positionMs).toBe(0)
+        // Optimistic update applies immediately
+        expect(store.positionMs).toBe(60000)
     })
 
     it('seekTo() rejects negative position', async () => {

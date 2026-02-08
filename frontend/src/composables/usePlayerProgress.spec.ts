@@ -25,7 +25,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: false,
-            positionMs: 125000, // 2:05
+            lastServerPositionMs: 125000, // 2:05
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
 
@@ -39,7 +40,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 251000, // 4:11
+            lastServerPositionMs: 251000, // 4:11
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 600000 }
         })
 
@@ -65,7 +67,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
+            lastServerPositionMs: 60000, // 1:00
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
 
@@ -78,7 +81,8 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('1:02')
 
         // Pause - server position has advanced to 1:01 (simulating real-world scenario)
-        store.positionMs = 62000 // 1:02 - server has caught up
+        store.lastServerPositionMs = 62000 // 1:02 - server has caught up
+        store.lastServerUpdateAt = new Date()
         store.isPlaying = false
         await nextTick()
 
@@ -94,7 +98,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
+            lastServerPositionMs: 60000, // 1:00
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
 
@@ -108,7 +113,8 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('1:05')
 
         // Server sends position that's 3 seconds behind (drift > 2s threshold)
-        store.positionMs = 62000 // 1:02 (3s behind local)
+        store.lastServerPositionMs = 62000 // 1:02 (3s behind local)
+        store.lastServerUpdateAt = new Date()
         await nextTick()
 
         // Should recalibrate to server position
@@ -119,7 +125,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
+            lastServerPositionMs: 60000, // 1:00
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
 
@@ -133,7 +140,8 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('1:01')
 
         // Server sends position that's 0.5s behind (drift < 2s threshold)
-        store.positionMs = 60500 // 1:00.5
+        store.lastServerPositionMs = 60500 // 1:00.5
+        store.lastServerUpdateAt = new Date()
         await nextTick()
 
         // Should NOT recalibrate - keep local position
@@ -144,7 +152,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 120000, // 2:00
+            lastServerPositionMs: 120000, // 2:00
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
 
@@ -157,7 +166,8 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('2:05')
 
         // Track changes - server sends new position
-        store.positionMs = 5000 // 0:05
+        store.lastServerPositionMs = 5000 // 0:05
+        store.lastServerUpdateAt = new Date()
         store.currentTrack = { id: 'track2', name: 'New Track', artist: 'Artist', durationMs: 200000 }
         await nextTick()
 
@@ -169,7 +179,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 58000, // 0:58
+            lastServerPositionMs: 58000, // 0:58
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 60000 } // 1:00 duration
         })
 
@@ -188,7 +199,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
+            lastServerPositionMs: 60000, // 1:00
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 120000 } // 2:00
         })
 
@@ -207,7 +219,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: false,
-            positionMs: 0,
+            lastServerPositionMs: 0,
+            lastServerUpdateAt: new Date(),
             currentTrack: null
         })
 
@@ -228,7 +241,8 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: false,
-            positionMs: 30000, // 0:30
+            lastServerPositionMs: 30000, // 0:30
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
 
@@ -237,7 +251,8 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('0:30')
 
         // Server updates position while paused
-        store.positionMs = 45000 // 0:45
+        store.lastServerPositionMs = 45000 // 0:45
+        store.lastServerUpdateAt = new Date()
         await nextTick()
 
         // Should sync immediately when paused

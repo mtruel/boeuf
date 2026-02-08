@@ -1,22 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { usePlayerStore } from '@/stores/player'
-import { usePlayerProgress } from '@/composables/usePlayerProgress'
+import { usePlayerProgress, formatTime as formatMsToTime } from '@/composables/usePlayerProgress'
 import { Play, Pause, SkipForward } from 'lucide-vue-next'
 
 const playerStore = usePlayerStore()
 const { currentPositionMs, currentPositionFormatted } = usePlayerProgress()
+const { isPlaying, isLoading, hasTrack, track, error } = storeToRefs(playerStore)
 
-// Computed states
-const isPlaying = computed(() => playerStore.isPlaying)
-const isLoading = computed(() => playerStore.isLoading)
-const hasTrack = computed(() => playerStore.hasTrack)
-const track = computed(() => playerStore.track)
-const error = computed(() => playerStore.error)
+// Track when user is dragging the slider
+const isDragging = ref(false)
+const dragPositionMs = ref(0)
 
-// Use interpolated position from usePlayerProgress (AC 8: real-time interpolation)
-const positionMs = currentPositionMs
-const positionFormatted = currentPositionFormatted
+// Computed: Show drag position while dragging, otherwise show actual position
+const displayPositionMs = computed(() => {
+    return isDragging.value ? dragPositionMs.value : currentPositionMs.value
+})
+
+// Computed: Show drag time while dragging
+const displayPositionFormatted = computed(() => {
+    return isDragging.value ? formatMsToTime(dragPositionMs.value) : currentPositionFormatted.value
+})
 
 // Computed: Friendly error message
 const friendlyError = computed(() => {
@@ -37,9 +42,23 @@ const nextTrack = async () => {
     await playerStore.nextTrack()
 }
 
-const handleSeek = (event: Event) => {
+// Handle mousedown - start dragging
+const handleMouseDown = () => {
+    isDragging.value = true
+    dragPositionMs.value = currentPositionMs.value
+}
+
+// Handle input during drag - update visual position only
+const handleInput = (event: Event) => {
+    const target = event.target as HTMLInputElement
+    dragPositionMs.value = parseInt(target.value, 10)
+}
+
+// Handle change on release - perform the seek
+const handleChange = (event: Event) => {
     const target = event.target as HTMLInputElement
     const newPositionMs = parseInt(target.value, 10)
+    isDragging.value = false
     // AC 9: Validation is done on backend (reject if positionMs > durationMs)
     playerStore.seekTo(newPositionMs)
 }
@@ -50,10 +69,7 @@ const dismissError = () => {
 
 // Format milliseconds to MM:SS
 const formatTime = (ms: number): string => {
-    const totalSeconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(totalSeconds / 60)
-    const seconds = totalSeconds % 60
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+    return formatMsToTime(ms)
 }
 </script>
 
@@ -63,17 +79,6 @@ const formatTime = (ms: number): string => {
         <div v-if="error" class="error-banner" role="alert">
             <p class="error-text">{{ friendlyError }}</p>
             <button @click="dismissError" class="btn-dismiss">Dismiss</button>
-        </div>
-
-        <!-- Track info -->
-        <div v-if="hasTrack && track" class="track-info">
-            <div v-if="track.imageUrl" class="track-image">
-                <img :src="track.imageUrl" :alt="track.name" />
-            </div>
-            <div class="track-details">
-                <p class="track-name">{{ track.name }}</p>
-                <p class="track-artist">{{ track.artist }}</p>
-            </div>
         </div>
 
         <!-- Controls -->
@@ -104,13 +109,15 @@ const formatTime = (ms: number): string => {
 
         <!-- Position slider (optional MVP) -->
         <div v-if="hasTrack && track" class="progress-container">
-            <span class="time-display">{{ positionFormatted }}</span>
+            <span class="time-display">{{ displayPositionFormatted }}</span>
             <input
                 type="range"
                 :min="0"
                 :max="track.durationMs"
-                :value="positionMs"
-                @change="handleSeek"
+                :value="displayPositionMs"
+                @mousedown="handleMouseDown"
+                @input="handleInput"
+                @change="handleChange"
                 :disabled="isLoading"
                 class="progress-slider"
             />
