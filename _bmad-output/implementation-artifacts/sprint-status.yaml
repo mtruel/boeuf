@@ -45,10 +45,10 @@ development_status:
   1-2-auth-spotify-oauth-authorization-code-pkce-avec-session-cookie: done
   1-3-creer-une-session-et-generer-un-lien-code-dinvitation: done
   1-4-rejoindre-une-session-via-lien-code-avec-controle-dacces: done
-  1-5-websocket-session-presence-participants-etat-connexion: backlog
-  1-6-sas-start-listening-anti-autoplay-et-etat-ready-synced: backlog
-  1-7-synchronisation-play-pause-evenements-ordonnes-idempotence: backlog
-  1-8-afficher-now-playing-morceau-artiste-progression-mise-a-jour-temps-reel: backlog
+  1-5-websocket-session-presence-participants-etat-connexion: ready-for-dev
+  1-6-sas-start-listening-anti-autoplay-et-etat-ready-synced: ready-for-dev
+  1-7-synchronisation-play-pause-evenements-ordonnes-idempotence: ready-for-dev
+  1-8-afficher-now-playing-morceau-artiste-progression-mise-a-jour-temps-reel: ready-for-dev
   epic-1-retrospective: optional
 
   epic-2: backlog
