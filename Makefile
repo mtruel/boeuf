@@ -3,7 +3,7 @@
 COMPOSE_FILE_PROD := -f docker-compose.yml
 COMPOSE_FILE_DEV  := -f docker-compose.yml -f docker-compose.dev.yml
 
-.PHONY: help watch dev-restart prod build down logs test test-backend test-frontend test-quick clean
+.PHONY: help watch dev-restart prod build down logs test test-backend test-frontend test-playwright docker-test docker-test-backend docker-test-frontend test-quick clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -38,19 +38,33 @@ logs: ## Show logs (snapshot, non-blocking)
 watch-logs: ## Follow logs (blocking)
 	docker compose logs -f
 
-test: test-backend test-frontend ## Run all tests
+test: test-backend test-frontend ## Run all tests (local)
 
-test-quick: ## Run all tests without rebuilding (faster, use after first build)
-	@echo "Running All Tests (Quick Mode - No Rebuild)..."
+test-quick: ## Run all local tests without rebuilding
+	@echo "Running All Tests (Local Quick Mode)..."
 	@$(MAKE) test-backend
 	@$(MAKE) test-frontend
 
-test-backend: ## Run Backend tests (Go)
-	@echo "Running Backend Tests..."
+test-backend: ## Run Backend tests (Go, local)
+	@echo "Running Backend Tests (Local)..."
+	cd backend && go test ./... -v
+
+test-frontend: ## Run Frontend tests (Vitest, local)
+	@echo "Running Frontend Tests (Local)..."
+	pnpm --dir frontend run test:unit -- --run
+
+test-playwright: ## Run Playwright E2E tests (local; requires browser install)
+	@echo "Running Playwright E2E Tests (Local)..."
+	pnpm --dir frontend exec playwright test
+
+docker-test: docker-test-backend docker-test-frontend ## Run all tests via Docker
+
+docker-test-backend: ## Run Backend tests (Go, Docker)
+	@echo "Running Backend Tests (Docker)..."
 	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps backend go test ./... -v
 
-test-frontend: ## Run Frontend tests (Vitest)
-	@echo "Running Frontend Tests..."
+docker-test-frontend: ## Run Frontend tests (Vitest, Docker)
+	@echo "Running Frontend Tests (Docker)..."
 	# Run tests using the built dev container with all deps pre-installed
 	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps frontend sh -c "pnpm run test:unit --run"
 
