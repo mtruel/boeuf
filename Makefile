@@ -18,6 +18,10 @@ dev-restart: ## Rebuild and start development environment (Non-blocking)
 	@echo "Rebuilding and Starting Dev Environment..."
 	docker compose $(COMPOSE_FILE_DEV) up -d --build --remove-orphans
 
+dev-up: ## Start development environment without rebuilding (faster)
+	@echo "Starting Dev Environment (No Rebuild)..."
+	docker compose $(COMPOSE_FILE_DEV) up -d --remove-orphans
+
 prod: ## Start production-like environment
 	@echo "Starting Production Environment..."
 	docker compose $(COMPOSE_FILE_PROD) up -d --build --remove-orphans

@@ -7,9 +7,13 @@ services:
       # The standard Dockerfile compiles binary. 
       # Rebuild action will trigger a full container rebuild/restart.
     command: go run ./cmd/boeuf-server
+    volumes:
+      - ./backend:/app
+      - go_pkg_mod:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
     develop:
       watch:
-        - action: rebuild
+        - action: sync
           path: ./backend
           target: /app
 
@@ -48,3 +52,7 @@ services:
     depends_on:
       - frontend
       - backend
+
+volumes:
+  go_pkg_mod:
+  go_build_cache:
