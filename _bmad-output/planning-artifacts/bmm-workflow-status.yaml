@@ -33,7 +33,8 @@ workflow_status:
   create-ux-design: "_bmad-output/planning-artifacts/ux-design-specification.md"
 
   # Phase 3: Solutioning
-  create-architecture: required
+  create-architecture: "_bmad-output/planning-artifacts/architecture.md"
+  generate-project-context: "_bmad-output/project-context.md"
   create-epics-and-stories: required
   test-design: optional
   implementation-readiness: required
