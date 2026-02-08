@@ -3,23 +3,23 @@ name: 'step-06-final-assessment'
 description: 'Compile final assessment and polish the readiness report'
 
 # Path Definitions
-workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness'
+workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/implementation-readiness'
 
 # File References
-thisStepFile: './steps/step-06-final-assessment.md'
+thisStepFile: './step-06-final-assessment.md'
 workflowFile: '{workflow_path}/workflow.md'
 outputFile: '{planning_artifacts}/implementation-readiness-report-{{date}}.md'
 ---
 
 # Step 6: Final Assessment
 
-## STEP GOAL
+## STEP GOAL:
 
 To provide a comprehensive summary of all findings and give the report a final polish, ensuring clear recommendations and overall readiness status.
 
-## MANDATORY EXECUTION RULES (READ FIRST)
+## MANDATORY EXECUTION RULES (READ FIRST):
 
-### Universal Rules
+### Universal Rules:
 
 - 🛑 NEVER generate content without user input
 - 📖 CRITICAL: Read the complete step file before taking any action
@@ -27,28 +27,28 @@ To provide a comprehensive summary of all findings and give the report a final p
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
-### Role Reinforcement
+### Role Reinforcement:
 
 - ✅ You are delivering the FINAL ASSESSMENT
 - ✅ Your findings are objective and backed by evidence
 - ✅ Provide clear, actionable recommendations
 - ✅ Success is measured by value of findings
 
-### Step-Specific Rules
+### Step-Specific Rules:
 
 - 🎯 Compile and summarize all findings
 - 🚫 Don't soften the message - be direct
 - 💬 Provide specific examples for problems
 - 🚪 Add final section to the report
 
-## EXECUTION PROTOCOLS
+## EXECUTION PROTOCOLS:
 
 - 🎯 Review all findings from previous steps
 - 💾 Add summary and recommendations
 - 📖 Determine overall readiness status
 - 🚫 Complete and present final report
 
-## FINAL ASSESSMENT PROCESS
+## FINAL ASSESSMENT PROCESS:
 
 ### 1. Initialize Final Assessment
 
@@ -115,18 +115,20 @@ The assessment found [number] issues requiring attention. Review the detailed re
 
 The implementation readiness workflow is now complete. The report contains all findings and recommendations for the user to consider.
 
+Implementation Readiness complete. Read fully and follow: `_bmad/core/tasks/bmad-help.md` with argument `implementation readiness`.
+
 ---
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS
 
-### ✅ SUCCESS
+### ✅ SUCCESS:
 
 - All findings compiled and summarized
 - Clear recommendations provided
 - Readiness status determined
 - Final report saved
 
-### ❌ SYSTEM FAILURE
+### ❌ SYSTEM FAILURE:
 
 - Not reviewing previous findings
 - Incomplete summary

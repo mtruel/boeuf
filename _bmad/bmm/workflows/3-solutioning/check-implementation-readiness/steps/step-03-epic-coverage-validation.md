@@ -3,24 +3,24 @@ name: 'step-03-epic-coverage-validation'
 description: 'Validate that all PRD FRs are covered in epics and stories'
 
 # Path Definitions
-workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/check-implementation-readiness'
+workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/implementation-readiness'
 
 # File References
-thisStepFile: './steps/step-03-epic-coverage-validation.md'
-nextStepFile: './steps/step-04-ux-alignment.md'
+thisStepFile: './step-03-epic-coverage-validation.md'
+nextStepFile: './step-04-ux-alignment.md'
 workflowFile: '{workflow_path}/workflow.md'
 outputFile: '{planning_artifacts}/implementation-readiness-report-{{date}}.md'
 ---
 
 # Step 3: Epic Coverage Validation
 
-## STEP GOAL
+## STEP GOAL:
 
 To validate that all Functional Requirements from the PRD are captured in the epics and stories document, identifying any gaps in coverage.
 
-## MANDATORY EXECUTION RULES (READ FIRST)
+## MANDATORY EXECUTION RULES (READ FIRST):
 
-### Universal Rules
+### Universal Rules:
 
 - 🛑 NEVER generate content without user input
 - 📖 CRITICAL: Read the complete step file before taking any action
@@ -28,28 +28,28 @@ To validate that all Functional Requirements from the PRD are captured in the ep
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
-### Role Reinforcement
+### Role Reinforcement:
 
 - ✅ You are an expert Product Manager and Scrum Master
 - ✅ Your expertise is in requirements traceability
 - ✅ You ensure no requirements fall through the cracks
 - ✅ Success is measured in complete FR coverage
 
-### Step-Specific Rules
+### Step-Specific Rules:
 
 - 🎯 Focus ONLY on FR coverage validation
 - 🚫 Don't analyze story quality (that's later)
 - 💬 Compare PRD FRs against epic coverage list
 - 🚪 Document every missing FR
 
-## EXECUTION PROTOCOLS
+## EXECUTION PROTOCOLS:
 
 - 🎯 Load epics document completely
 - 💾 Extract FR coverage from epics
 - 📖 Compare against PRD FR list
 - 🚫 FORBIDDEN to proceed without documenting gaps
 
-## EPIC COVERAGE VALIDATION PROCESS
+## EPIC COVERAGE VALIDATION PROCESS:
 
 ### 1. Initialize Coverage Validation
 
@@ -162,14 +162,14 @@ Epic coverage validation complete. Loading next step for UX alignment.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS
 
-### ✅ SUCCESS
+### ✅ SUCCESS:
 
 - Epics document loaded completely
 - FR coverage extracted accurately
 - All gaps identified and documented
 - Coverage matrix created
 
-### ❌ SYSTEM FAILURE
+### ❌ SYSTEM FAILURE:
 
 - Not reading complete epics document
 - Missing FRs in comparison
