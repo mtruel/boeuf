@@ -15,15 +15,15 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	"github.com/mathias/boeuf/internal/models"
 	"github.com/mathias/boeuf/internal/realtime"
-	"github.com/mathias/boeuf/internal/session"
 	"github.com/mathias/boeuf/internal/spotify"
 	"gorm.io/gorm"
 )
 
 type SessionHandler struct {
-	store                    session.Store
+	store                    *sessions.CookieStore
 	db                       *gorm.DB
 	baseURL                  string
 	sessionDuration          time.Duration
@@ -34,7 +34,7 @@ type SessionHandler struct {
 	realtimeHub              *realtime.Hub
 }
 
-func NewSessionHandler(store session.Store, db *gorm.DB, baseURL string) *SessionHandler {
+func NewSessionHandler(store *sessions.CookieStore, db *gorm.DB, baseURL string) *SessionHandler {
 	return &SessionHandler{
 		store:                    store,
 		db:                       db,
@@ -49,7 +49,7 @@ func NewSessionHandler(store session.Store, db *gorm.DB, baseURL string) *Sessio
 }
 
 // NewSessionHandlerWithDuration creates a SessionHandler with custom session duration
-func NewSessionHandlerWithDuration(store session.Store, db *gorm.DB, baseURL string, duration time.Duration) *SessionHandler {
+func NewSessionHandlerWithDuration(store *sessions.CookieStore, db *gorm.DB, baseURL string, duration time.Duration) *SessionHandler {
 	return &SessionHandler{
 		store:                    store,
 		db:                       db,
@@ -435,22 +435,6 @@ func (h *SessionHandler) sendErrorResponse(w http.ResponseWriter, statusCode int
 	json.NewEncoder(w).Encode(response)
 }
 
-func (h *SessionHandler) sendDeviceErrorResponse(w http.ResponseWriter, statusCode int, code, message, suggestedAction string, requiresActiveDevice bool) {
-	response := map[string]interface{}{
-		"code":            code,
-		"message":         message,
-		"suggestedAction": suggestedAction,
-	}
-
-	if requiresActiveDevice {
-		response["requiresActiveDevice"] = true
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(response)
-}
-
 // GetParticipantMeResponse represents the response for /api/sessions/:sessionId/me
 type GetParticipantMeResponse struct {
 	UserID     string `json:"userId"`
@@ -531,8 +515,6 @@ type StartSyncResponse struct {
 
 var errSpotifyPlayerUnavailable = errors.New("SPOTIFY_PLAYER_UNAVAILABLE")
 var errSpotifyNoDevice = errors.New("SPOTIFY_NO_DEVICE")
-
-const suggestedActionOpenSpotifyWebPlayer = "OPEN_SPOTIFY_WEB_PLAYER"
 
 // StartSync marks the participant as synced and initializes synchronization
 // POST /api/sessions/:sessionId/sync/start
@@ -638,14 +620,13 @@ func (h *SessionHandler) StartSync(w http.ResponseWriter, r *http.Request) {
 	// AC 1: No device available → return 503 with requiresActiveDevice flag
 	if len(devices) == 0 {
 		log.Printf("INFO: No active Spotify device found for user %s", userID)
-		h.sendDeviceErrorResponse(
-			w,
-			http.StatusServiceUnavailable,
-			"SPOTIFY_NO_DEVICE",
-			"No active Spotify device found. Please start playback in Spotify.",
-			suggestedActionOpenSpotifyWebPlayer,
-			true,
-		)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":                 "SPOTIFY_NO_DEVICE",
+			"message":              "No active Spotify device found. Please start playback in Spotify.",
+			"requiresActiveDevice": true,
+		})
 		return
 	}
 
@@ -668,14 +649,7 @@ func (h *SessionHandler) StartSync(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, spotify.ErrSpotifyNotConnected):
 			h.sendErrorResponse(w, http.StatusConflict, "SPOTIFY_NOT_CONNECTED", "Please connect your Spotify account to start listening")
 		case errors.Is(err, errSpotifyPlayerUnavailable):
-			h.sendDeviceErrorResponse(
-				w,
-				http.StatusServiceUnavailable,
-				"SPOTIFY_PLAYER_UNAVAILABLE",
-				"No active Spotify device found. Start Spotify on any device and retry.",
-				suggestedActionOpenSpotifyWebPlayer,
-				true,
-			)
+			h.sendErrorResponse(w, http.StatusServiceUnavailable, "SPOTIFY_PLAYER_UNAVAILABLE", "No active Spotify device found. Start Spotify on any device and retry.")
 		default:
 			log.Printf("ERROR: Failed to get Spotify playback: %v", err)
 			h.sendErrorResponse(w, http.StatusServiceUnavailable, "SPOTIFY_UNAVAILABLE", "Failed to fetch Spotify playback state")

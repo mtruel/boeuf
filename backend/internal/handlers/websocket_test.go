@@ -546,8 +546,8 @@ func TestWebSocketEndToEndIntegration(t *testing.T) {
 
 	// Create participants
 	participants := []models.SessionParticipant{
-		{SessionID: sessionID, UserID: user1ID, Role: "host", JoinedAt: time.Now(), LastSeenAt: time.Now().Unix()},
-		{SessionID: sessionID, UserID: user2ID, Role: "participant", JoinedAt: time.Now(), LastSeenAt: time.Now().Unix()},
+		{SessionID: sessionID, UserID: user1ID, Role: "host", JoinedAt: time.Now(), LastSeenAt: time.Now()},
+		{SessionID: sessionID, UserID: user2ID, Role: "participant", JoinedAt: time.Now(), LastSeenAt: time.Now()},
 	}
 	for _, p := range participants {
 		db.Create(&p)

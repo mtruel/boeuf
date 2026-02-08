@@ -313,7 +313,7 @@ func TestStartSync_NoSpotifyToken(t *testing.T) {
 
 	// Create session and participant (with user that has NO Spotify token)
 	sessionID := "test-session-123"
-	userID := "user-without-token" // Use user that doesn't have a token in setupSyncTest
+	userID := "user-without-token"  // Use user that doesn't have a token in setupSyncTest
 	now := time.Now()
 	db.Create(&models.Session{
 		ID:        sessionID,
@@ -591,9 +591,6 @@ func TestStartSync_PlayerUnavailable_ReturnsStableError(t *testing.T) {
 	if resp["requiresActiveDevice"] != true {
 		t.Fatalf("Expected requiresActiveDevice=true, got %v", resp["requiresActiveDevice"])
 	}
-	if resp["suggestedAction"] != "OPEN_SPOTIFY_WEB_PLAYER" {
-		t.Fatalf("Expected suggestedAction OPEN_SPOTIFY_WEB_PLAYER, got %v", resp["suggestedAction"])
-	}
 	if !strings.Contains(resp["message"].(string), "No active Spotify device found") {
 		t.Fatalf("Expected device error message, got %v", resp["message"])
 	}
@@ -634,49 +631,6 @@ func TestStartSync_NoDevice_ReturnsRequiresActiveDeviceFlag(t *testing.T) {
 	}
 	if resp["requiresActiveDevice"] != true {
 		t.Fatalf("Expected requiresActiveDevice=true, got %v", resp["requiresActiveDevice"])
-	}
-	if resp["suggestedAction"] != "OPEN_SPOTIFY_WEB_PLAYER" {
-		t.Fatalf("Expected suggestedAction OPEN_SPOTIFY_WEB_PLAYER, got %v", resp["suggestedAction"])
-	}
-}
-
-func TestStartSync_PlayerUnavailable_WithDevice_ReturnsSuggestedAction(t *testing.T) {
-	db, handler, store := setupSyncTest()
-
-	sessionID := "test-session-123"
-	userID := "test-user-456"
-	now := time.Now()
-	db.Create(&models.Session{ID: sessionID, Active: true, ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now})
-	db.Create(&models.SessionParticipant{SessionID: sessionID, UserID: userID, Role: "participant", SyncState: "ready", JoinedAt: now, LastSeenAt: now.Unix()})
-	db.Create(&models.SpotifyToken{SpotifyUserID: userID, AccessToken: "test-access-token", RefreshTokenEncrypted: "dummy", ExpiresAt: time.Now().Add(1 * time.Hour), Scope: "user-read-playback-state"})
-
-	// Mock Spotify with 1 device but no active playback (204 No Content)
-	spotifyServer := setupSpotifyMock(t, 1, nil)
-	defer spotifyServer.Close()
-	configureSpotifyMock(handler, spotifyServer)
-
-	req := httptest.NewRequest("POST", "/api/sessions/"+sessionID+"/sync/start", nil)
-	req = mux.SetURLVars(req, map[string]string{"sessionId": sessionID})
-	w := httptest.NewRecorder()
-	sess, _ := store.Get(req, "boeuf-session")
-	sess.Values["spotify_user_id"] = userID
-	sess.Save(req, w)
-
-	handler.StartSync(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("Expected status 503, got %d", w.Code)
-	}
-	var resp map[string]interface{}
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["code"] != "SPOTIFY_PLAYER_UNAVAILABLE" {
-		t.Fatalf("Expected SPOTIFY_PLAYER_UNAVAILABLE, got %v", resp["code"])
-	}
-	if resp["requiresActiveDevice"] != true {
-		t.Fatalf("Expected requiresActiveDevice=true, got %v", resp["requiresActiveDevice"])
-	}
-	if resp["suggestedAction"] != "OPEN_SPOTIFY_WEB_PLAYER" {
-		t.Fatalf("Expected suggestedAction OPEN_SPOTIFY_WEB_PLAYER, got %v", resp["suggestedAction"])
 	}
 }
 
