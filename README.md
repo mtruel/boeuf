@@ -87,17 +87,28 @@ Tous les PRs vers `main` ou `dev` déclenchent automatiquement :
 
 Ces tests doivent réussir avant toute fusion.
 
-### Build manuel (avant fusion)
+### Build automatique des images Docker sur Pull Requests
 
-Le build des images Docker doit être déclenché **manuellement** par un mainteneur :
+**Nouveau !** À chaque commit sur un PR, les images Docker sont automatiquement buildées et publiées :
+
+- **Workflow** : `PR Build`
+- **Images publiées** :
+  - `ghcr.io/<owner>/boeuf-backend:pr-<number>`
+  - `ghcr.io/<owner>/boeuf-frontend:pr-<number>`
+  - `ghcr.io/<owner>/boeuf-backend:pr-<number>-<commit-sha>`
+  - `ghcr.io/<owner>/boeuf-frontend:pr-<number>-<commit-sha>`
+
+Un commentaire est automatiquement ajouté sur le PR avec les tags des images après chaque build réussi. Vous pouvez ainsi tester n'importe quelle version d'un PR avant de le merger.
+
+### Build manuel (optionnel)
+
+Si besoin, vous pouvez aussi déclencher **manuellement** un build :
 
 1. Allez dans l'onglet **Actions** du repository GitHub
 2. Sélectionnez le workflow **"Manual Build Check"**
 3. Cliquez sur **"Run workflow"**
 4. Entrez le numéro du PR à builder
 5. Le workflow va builder et publier les images Docker avec le tag `pr-<number>`
-
-Un commentaire sera automatiquement ajouté sur le PR après un build réussi.
 
 ### Déploiement automatisé (GitHub Actions + Watchtower)
 

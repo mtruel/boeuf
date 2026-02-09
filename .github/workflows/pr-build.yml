@@ -1,0 +1,97 @@
+name: PR Build
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+
+jobs:
+  build:
+    name: Build PR Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image owner
+        shell: bash
+        run: echo "IMAGE_OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract PR number
+        id: pr
+        run: echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+
+      - name: Docker metadata (backend)
+        id: meta_backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend
+          tags: |
+            type=raw,value=pr-${{ steps.pr.outputs.number }}
+            type=sha,prefix=pr-${{ steps.pr.outputs.number }}-
+
+      - name: Docker metadata (frontend)
+        id: meta_frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend
+          tags: |
+            type=raw,value=pr-${{ steps.pr.outputs.number }}
+            type=sha,prefix=pr-${{ steps.pr.outputs.number }}-
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_backend.outputs.tags }}
+          labels: ${{ steps.meta_backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_frontend.outputs.tags }}
+          labels: ${{ steps.meta_frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr.outputs.number }};
+            const sha = context.sha.substring(0, 7);
+            
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚀 PR Build Successful!\n\n**Images published for commit \`${sha}\`:**\n\n### Backend\n\`\`\`\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend:pr-${prNumber}\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend:pr-${prNumber}-${sha}\n\`\`\`\n\n### Frontend\n\`\`\`\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend:pr-${prNumber}\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend:pr-${prNumber}-${sha}\n\`\`\`\n\n**To test this build:**\n\`\`\`bash\ndocker pull ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend:pr-${prNumber}\ndocker pull ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend:pr-${prNumber}\n\`\`\``
+            });
