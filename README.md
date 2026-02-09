@@ -77,6 +77,8 @@ docker compose up -d
 
 L'application sera accessible sur `http://localhost:3000` (ou le port défini dans `EXPOSE_PORT`).
 
+**Pour plus de détails sur le déploiement, consultez [DEPLOYMENT.md](./DEPLOYMENT.md)**
+
 ## Configuration des variables d'environnement
 
 ### Variables requises
