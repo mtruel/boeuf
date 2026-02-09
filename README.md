@@ -67,11 +67,50 @@ cd frontend && pnpm test:e2e
 
 #### Déploiement complet
 
+Le déploiement utilise une image Docker unique qui contient le frontend, le backend et le reverse proxy Caddy.
+
 ```bash
 cp .env.example .env
 # Éditer .env avec vos credentials Spotify
-docker compose up
+docker compose up -d
 ```
+
+L'application sera accessible sur `http://localhost:3000` (ou le port défini dans `EXPOSE_PORT`).
+
+## Configuration des variables d'environnement
+
+### Variables requises
+
+Ces variables doivent être définies dans le fichier `.env` :
+
+| Variable | Description | Exemple |
+|----------|-------------|---------|
+| `SPOTIFY_CLIENT_ID` | Client ID de votre application Spotify | `abc123def456` |
+| `SPOTIFY_CLIENT_SECRET` | Client Secret de votre application Spotify | `xyz789uvw012` |
+| `APP_SECRET` | Clé secrète pour le chiffrement (32 caractères hexadécimaux) | `0123456789abcdef0123456789abcdef` |
+| `EXPOSE_PORT` | Port exposé sur l'hôte pour accéder à l'application | `3000` |
+
+**Générer un APP_SECRET :**
+```bash
+openssl rand -hex 16
+```
+
+### Variables optionnelles
+
+Ces variables ont des valeurs par défaut et peuvent être omises :
+
+| Variable | Description | Défaut | Exemple |
+|----------|-------------|--------|---------|
+| `SESSION_DURATION_HOURS` | Durée de validité des sessions et invitations (en heures) | `24` | `48` |
+| `MAX_ACTIVE_SESSIONS_PER_USER` | Nombre maximum de sessions actives par utilisateur (0 = illimité) | `10` | `5` |
+| `PUBLIC_URL` | URL publique pour les callbacks OAuth | `http://localhost:3000` | `https://boeuf.example.com` |
+| `SPOTIFY_REDIRECT_URI` | URI de redirection OAuth Spotify | `http://localhost:3000/auth/spotify/callback` | `https://boeuf.example.com/auth/spotify/callback` |
+
+### Notes importantes
+
+- **APP_SECRET** : Cette clé est utilisée pour chiffrer les tokens Spotify et sécuriser les sessions. Elle doit faire exactement 32 caractères hexadécimaux (16 octets).
+- **PUBLIC_URL et SPOTIFY_REDIRECT_URI** : En production, ces URLs doivent correspondre à votre domaine public et être enregistrées dans la configuration de votre application Spotify.
+- Les données de la base de données SQLite sont stockées dans un volume Docker persistant.
 
 ## Déploiement automatisé (GitHub Actions + Watchtower)
 

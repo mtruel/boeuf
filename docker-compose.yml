@@ -1,48 +1,28 @@
 services:
-  caddy:
-    image: caddy:2.10.2-alpine
+  boeuf:
+    build: .
     restart: unless-stopped
     ports:
       - "${EXPOSE_PORT:-3000}:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - frontend_dist:/usr/share/caddy
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - boeuf-network
-
-  frontend:
-    build: 
-      context: ./frontend
-      target: prod
-    volumes:
-      - frontend_dist:/app/dist
-    networks:
-      - boeuf-network
-
-  backend:
-    build: ./backend
     env_file:
       - .env
     environment:
-      - PORT=${PORT:-8080}
-      - SESSION_KEY=${SESSION_KEY}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
-      - ENV=${ENV:-development}
-      - DATABASE_PATH=${DATABASE_PATH:-./data/boeuf.db}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - APP_SECRET=${APP_SECRET}
+      - EXPOSE_PORT=${EXPOSE_PORT:-3000}
+      - PORT=8080
+      - NODE_ENV=production
+      - SESSION_KEY=${APP_SECRET}
+      - ENCRYPTION_KEY=${APP_SECRET}
+      - SESSION_DURATION_HOURS=${SESSION_DURATION_HOURS:-24}
+      - MAX_ACTIVE_SESSIONS_PER_USER=${MAX_ACTIVE_SESSIONS_PER_USER:-10}
+      - ENV=production
+      - DATABASE_PATH=/app/data/boeuf.db
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:3000/auth/spotify/callback}
     volumes:
-      - backend_data:/app/data
-    networks:
-      - boeuf-network
-
-networks:
-  boeuf-network:
-    driver: bridge
+      - boeuf_data:/app/data
 
 volumes:
-  frontend_dist:
-  backend_data:
+  boeuf_data:
