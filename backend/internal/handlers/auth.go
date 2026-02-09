@@ -59,7 +59,7 @@ func isAllowedReturnTo(returnTo string) bool {
 func (h *SpotifyAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// Get config from environment
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
-	redirectURI := os.Getenv("SPOTIFY_REDIRECT_URI")
+	redirectURI := getRedirectURI()
 
 	if clientID == "" || redirectURI == "" {
 		log.Printf("ERROR: Missing Spotify OAuth config")
@@ -87,9 +87,21 @@ func (h *SpotifyAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// Store state and code_verifier in session (server-side)
 	sess, err := h.store.Get(r, session.SessionName)
 	if err != nil {
-		log.Printf("ERROR: Failed to get session: %v", err)
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
+		log.Printf("WARN: Failed to get session, creating new: %v", err)
+		cleanRequest := r.Clone(r.Context())
+		cleanRequest.Header = r.Header.Clone()
+		cleanRequest.Header.Del("Cookie")
+		for _, cookie := range r.Cookies() {
+			if cookie.Name != session.SessionName {
+				cleanRequest.AddCookie(cookie)
+			}
+		}
+		sess, err = h.store.New(cleanRequest, session.SessionName)
+		if err != nil {
+			log.Printf("ERROR: Failed to create session: %v", err)
+			http.Error(w, "Session error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	sess.Values["state"] = state
@@ -169,7 +181,7 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	// Get config
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
-	redirectURI := os.Getenv("SPOTIFY_REDIRECT_URI")
+	redirectURI := getRedirectURI()
 
 	if h.tokenService == nil {
 		log.Printf("ERROR: Token service not initialized")
@@ -212,6 +224,18 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		redirectURL = returnTo
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
+func getRedirectURI() string {
+	redirectURI := os.Getenv("SPOTIFY_REDIRECT_URI")
+	if redirectURI != "" {
+		return redirectURI
+	}
+	publicURL := os.Getenv("PUBLIC_URL")
+	if publicURL == "" {
+		return ""
+	}
+	return strings.TrimRight(publicURL, "/") + "/auth/spotify/callback"
 }
 
 // Logout clears the Spotify authentication from the session
