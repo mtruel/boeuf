@@ -1,0 +1,38 @@
+# Git
+.git
+.github
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Documentation and development
+README.md
+LICENSE
+*.md
+_bmad
+_bmad-output
+.vscode
+.opencode
+
+# Dependencies (will be installed during build)
+backend/vendor
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Build artifacts
+backend/data
+*.log
+
+# Testing
+frontend/playwright-report
+frontend/test-results
+spike-spotify-api
+
+# Other
+docker-compose*.yml
+Caddyfile.dev
+Makefile

@@ -62,10 +62,19 @@ COPY Caddyfile /etc/caddy/Caddyfile
 EXPOSE 80
 
 # Create a startup script to run both backend and Caddy
-RUN echo '#!/bin/sh' > /start.sh && \
-    echo 'cd /app && ./backend &' >> /start.sh && \
-    echo 'exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile' >> /start.sh && \
-    chmod +x /start.sh
+COPY <<EOF /start.sh
+#!/bin/sh
+set -e
+
+# Start backend in background
+cd /app && ./backend &
+BACKEND_PID=\$!
+
+# Start Caddy in foreground
+exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+EOF
+
+RUN chmod +x /start.sh
 
 # Set working directory
 WORKDIR /app
