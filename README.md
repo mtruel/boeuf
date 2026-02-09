@@ -87,18 +87,23 @@ Tous les PRs vers `main` ou `dev` déclenchent automatiquement :
 
 Ces tests doivent réussir avant toute fusion.
 
-### Build automatique des images Docker sur Pull Requests
+### Build automatique de l'image Docker unifiée sur Pull Requests
 
-**Nouveau !** À chaque commit sur un PR, les images Docker sont automatiquement buildées et publiées :
+**Architecture simplifiée !** À chaque commit sur un PR, une **image Docker unifiée** est automatiquement buildée et publiée :
 
 - **Workflow** : `PR Build`
-- **Images publiées** :
-  - `ghcr.io/<owner>/boeuf-backend:pr-<number>`
-  - `ghcr.io/<owner>/boeuf-frontend:pr-<number>`
-  - `ghcr.io/<owner>/boeuf-backend:pr-<number>-<commit-sha>`
-  - `ghcr.io/<owner>/boeuf-frontend:pr-<number>-<commit-sha>`
+- **Image publiée** : `ghcr.io/<owner>/boeuf` (contient backend + frontend + Caddy)
+- **Tags disponibles** :
+  - `pr-<number>` (dernière version du PR)
+  - `pr-<number>-<commit-sha>` (commit spécifique)
 
-Un commentaire est automatiquement ajouté sur le PR avec les tags des images après chaque build réussi. Vous pouvez ainsi tester n'importe quelle version d'un PR avant de le merger.
+L'image unifiée contient tout ce dont vous avez besoin :
+- ✅ Backend Go avec SQLite
+- ✅ Frontend Vue.js buildé
+- ✅ Caddy comme reverse proxy
+- ✅ Prêt à déployer avec une seule commande !
+
+Un commentaire est automatiquement ajouté sur le PR avec les instructions de test.
 
 ### Build manuel (optionnel)
 
@@ -108,9 +113,7 @@ Si besoin, vous pouvez aussi déclencher **manuellement** un build :
 2. Sélectionnez le workflow **"Manual Build Check"**
 3. Cliquez sur **"Run workflow"**
 4. Entrez le numéro du PR à builder
-5. Le workflow va builder et publier les images Docker avec le tag `pr-<number>`
-
-### Déploiement automatisé (GitHub Actions + Watchtower)
+5. Le workflow va builder et publier l'image Docker unifiée
 
 **Pour plus de détails sur le déploiement, consultez [DEPLOYMENT.md](./DEPLOYMENT.md)**
 
@@ -161,6 +164,20 @@ Pour utiliser l'image pré-construite, commentez la ligne `build: .` dans `docke
 ```yaml
 image: ghcr.io/mtruel/boeuf:dev
 ```
+
+**Déploiement en une commande :**
+
+```bash
+docker run -d \
+  -p 3000:80 \
+  -v boeuf_data:/app/data \
+  -e SPOTIFY_CLIENT_ID=your_client_id \
+  -e SPOTIFY_CLIENT_SECRET=your_client_secret \
+  -e APP_SECRET=your_32_char_hex_key \
+  ghcr.io/<owner>/boeuf:latest
+```
+
+L'application sera accessible sur `http://localhost:3000`.
 
 ## Stack technique
 

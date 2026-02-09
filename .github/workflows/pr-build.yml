@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Build PR Images
+    name: Build PR Image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,44 +41,23 @@ jobs:
         id: pr
         run: echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
 
-      - name: Docker metadata (backend)
-        id: meta_backend
+      - name: Docker metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend
+          images: ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf
           tags: |
             type=raw,value=pr-${{ steps.pr.outputs.number }}
             type=sha,prefix=pr-${{ steps.pr.outputs.number }}-
 
-      - name: Docker metadata (frontend)
-        id: meta_frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend
-          tags: |
-            type=raw,value=pr-${{ steps.pr.outputs.number }}
-            type=sha,prefix=pr-${{ steps.pr.outputs.number }}-
-
-      - name: Build and push backend
+      - name: Build and push unified image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta_backend.outputs.tags }}
-          labels: ${{ steps.meta_backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push frontend
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          target: prod
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta_frontend.outputs.tags }}
-          labels: ${{ steps.meta_frontend.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -93,5 +72,5 @@ jobs:
               issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## 🚀 PR Build Successful!\n\n**Images published for commit \`${sha}\`:**\n\n### Backend\n\`\`\`\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend:pr-${prNumber}\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend:pr-${prNumber}-${sha}\n\`\`\`\n\n### Frontend\n\`\`\`\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend:pr-${prNumber}\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend:pr-${prNumber}-${sha}\n\`\`\`\n\n**To test this build:**\n\`\`\`bash\ndocker pull ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-backend:pr-${prNumber}\ndocker pull ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf-frontend:pr-${prNumber}\n\`\`\``
+              body: `## 🚀 PR Build Successful!\n\n**Unified image published for commit \`${sha}\`:**\n\n\`\`\`\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf:pr-${prNumber}\nghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf:pr-${prNumber}-${sha}\n\`\`\`\n\n**To test this build:**\n\`\`\`bash\ndocker pull ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf:pr-${prNumber}\ndocker run -p 3000:80 -e SPOTIFY_CLIENT_ID=your_id -e SPOTIFY_CLIENT_SECRET=your_secret -e SESSION_KEY=your_key -e ENCRYPTION_KEY=your_key ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf:pr-${prNumber}\n\`\`\`\n\nThe image contains backend, frontend, and Caddy reverse proxy - everything you need in one container!`
             });
