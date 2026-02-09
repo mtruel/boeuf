@@ -77,6 +77,30 @@ docker compose up -d
 
 L'application sera accessible sur `http://localhost:3000` (ou le port défini dans `EXPOSE_PORT`).
 
+## GitHub Actions & CI/CD
+
+### Tests automatiques sur Pull Requests
+
+Tous les PRs vers `main` ou `dev` déclenchent automatiquement :
+- **Tests backend** : `go test ./...`
+- **Tests frontend** : `pnpm test:unit`
+
+Ces tests doivent réussir avant toute fusion.
+
+### Build manuel (avant fusion)
+
+Le build des images Docker doit être déclenché **manuellement** par un mainteneur :
+
+1. Allez dans l'onglet **Actions** du repository GitHub
+2. Sélectionnez le workflow **"Manual Build Check"**
+3. Cliquez sur **"Run workflow"**
+4. Entrez le numéro du PR à builder
+5. Le workflow va builder et publier les images Docker avec le tag `pr-<number>`
+
+Un commentaire sera automatiquement ajouté sur le PR après un build réussi.
+
+### Déploiement automatisé (GitHub Actions + Watchtower)
+
 **Pour plus de détails sur le déploiement, consultez [DEPLOYMENT.md](./DEPLOYMENT.md)**
 
 ## Configuration des variables d'environnement
