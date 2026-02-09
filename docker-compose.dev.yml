@@ -1,24 +1,45 @@
 services:
-  backend:
+  # Override boeuf service for development - build instead of using image
+  boeuf:
+    build: .
+    environment:
+      - RUNTIME_ENV=development
+    # For dev, we might want to expose backend directly
+    ports:
+      - "${EXPOSE_PORT:-3000}:80"
+      - "8080:8080"  # Direct backend access for debugging
+
+  # Separate backend service for hot reload during development
+  backend-dev:
     build:
       context: ./backend
       target: build 
-      # We target build stage or standard, but for watch we want rapid feedback.
-      # The standard Dockerfile compiles binary. 
-      # Rebuild action will trigger a full container rebuild/restart.
     command: go run ./cmd/boeuf-server
     volumes:
       - ./backend:/app
       - go_pkg_mod:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
+    environment:
+      - PORT=8080
+      - RUNTIME_ENV=development
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - APP_SECRET=${APP_SECRET:-0123456789abcdef0123456789abcdef}
+      - SESSION_KEY=${APP_SECRET:-0123456789abcdef0123456789abcdef}
+      - ENCRYPTION_KEY=${APP_SECRET:-0123456789abcdef0123456789abcdef}
+      - DATABASE_PATH=./data/boeuf.db
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:3000/auth/spotify/callback}
+    ports:
+      - "8080:8080"
     develop:
       watch:
-        - action: sync
+        - action: sync+restart
           path: ./backend
           target: /app
 
-  frontend:
-    # Use the dev stage from our Dockerfile which has Node & pnpm installed
+  # Separate frontend service for hot reload during development
+  frontend-dev:
     build:
       context: ./frontend
       target: dev
@@ -26,13 +47,11 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    # Install dependencies if missing, then start Vite
-    # Use pnpm to respect lockfile
     command: sh -c "npm install -g pnpm && if [ ! -d node_modules ]; then pnpm install; fi && pnpm exec vite --host"
     environment:
-      - CHOKIDAR_USEPOLLING=true # Often needed for Docker file watching
+      - CHOKIDAR_USEPOLLING=true
     ports:
-      - "5173:5173" # Expose for direct access if needed
+      - "5173:5173"
     develop:
       watch:
         - action: sync
@@ -45,13 +64,6 @@ services:
           target: /app/public
         - action: rebuild
           path: ./frontend/package.json
-
-  caddy:
-    volumes:
-      - ./Caddyfile.dev:/etc/caddy/Caddyfile
-    depends_on:
-      - frontend
-      - backend
 
 volumes:
   go_pkg_mod:
