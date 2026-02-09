@@ -21,15 +21,18 @@ describe('usePlayerProgress', () => {
         vi.useRealTimers()
     })
 
-    it('should initialize with position from store', () => {
+    it('should initialize with position from store', async () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: false,
-            positionMs: 125000, // 2:05
+            lastServerPositionMs: 125000, // 2:05
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
         })
+        await nextTick()
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         expect(progress.currentPositionMs.value).toBe(125000)
         expect(progress.currentPositionFormatted.value).toBe('2:05')
@@ -39,11 +42,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 251000, // 4:11
+            lastServerPositionMs: 251000, // 4:11
+            lastServerUpdateAt: new Date(),
             currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 600000 }
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         // Initial position
         expect(progress.currentPositionFormatted.value).toBe('4:11')
@@ -65,11 +70,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
+            lastServerPositionMs: 60000, // 1:00
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 ,
+            lastServerUpdateAt: new Date()}
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         // Advance 2 seconds while playing
         vi.advanceTimersByTime(2000)
@@ -78,7 +85,7 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('1:02')
 
         // Pause - server position has advanced to 1:01 (simulating real-world scenario)
-        store.positionMs = 62000 // 1:02 - server has caught up
+        store.lastServerPositionMs = 62000 // 1:02 - server has caught up
         store.isPlaying = false
         await nextTick()
 
@@ -94,11 +101,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
+            lastServerPositionMs: 60000, // 1:00
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 ,
+            lastServerUpdateAt: new Date()}
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         // Advance 5 seconds locally
         vi.advanceTimersByTime(5000)
@@ -108,7 +117,7 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('1:05')
 
         // Server sends position that's 3 seconds behind (drift > 2s threshold)
-        store.positionMs = 62000 // 1:02 (3s behind local)
+        store.lastServerPositionMs = 62000 // 1:02 (3s behind local)
         await nextTick()
 
         // Should recalibrate to server position
@@ -119,11 +128,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
+            lastServerPositionMs: 60000, // 1:00
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 ,
+            lastServerUpdateAt: new Date()}
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         // Advance 1 second locally
         vi.advanceTimersByTime(1000)
@@ -133,7 +144,7 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('1:01')
 
         // Server sends position that's 0.5s behind (drift < 2s threshold)
-        store.positionMs = 60500 // 1:00.5
+        store.lastServerPositionMs = 60500 // 1:00.5
         await nextTick()
 
         // Should NOT recalibrate - keep local position
@@ -144,11 +155,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 120000, // 2:00
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
+            lastServerPositionMs: 120000, // 2:00
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 ,
+            lastServerUpdateAt: new Date()}
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         // Advance some time
         vi.advanceTimersByTime(5000)
@@ -157,7 +170,7 @@ describe('usePlayerProgress', () => {
         expect(progress.currentPositionFormatted.value).toBe('2:05')
 
         // Track changes - server sends new position
-        store.positionMs = 5000 // 0:05
+        store.lastServerPositionMs = 5000 // 0:05
         store.currentTrack = { id: 'track2', name: 'New Track', artist: 'Artist', durationMs: 200000 }
         await nextTick()
 
@@ -169,11 +182,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 58000, // 0:58
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 60000 } // 1:00 duration
+            lastServerPositionMs: 58000, // 0:58
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 60000 ,
+            lastServerUpdateAt: new Date()} // 1:00 duration
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         // Advance 5 seconds - should cap at duration
         vi.advanceTimersByTime(5000)
@@ -188,11 +203,13 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: true,
-            positionMs: 60000, // 1:00
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 120000 } // 2:00
+            lastServerPositionMs: 60000, // 1:00
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 120000 ,
+            lastServerUpdateAt: new Date()} // 2:00
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         expect(progress.progressPercent.value).toBe(50)
 
@@ -203,15 +220,17 @@ describe('usePlayerProgress', () => {
         expect(progress.progressPercent.value).toBe(75)
     })
 
-    it('should return 0% progress when no track', () => {
+    it('should return 0% progress when no track', async () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: false,
-            positionMs: 0,
+            lastServerPositionMs: 0,
             currentTrack: null
-        })
+        ,
+            lastServerUpdateAt: new Date()})
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         expect(progress.progressPercent.value).toBe(0)
     })
@@ -228,16 +247,18 @@ describe('usePlayerProgress', () => {
         const store = usePlayerStore()
         store.$patch({
             isPlaying: false,
-            positionMs: 30000, // 0:30
-            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 }
+            lastServerPositionMs: 30000, // 0:30
+            currentTrack: { id: 'track1', name: 'Test', artist: 'Artist', durationMs: 300000 ,
+            lastServerUpdateAt: new Date()}
         })
 
         const progress = usePlayerProgress()
+        await nextTick()
 
         expect(progress.currentPositionFormatted.value).toBe('0:30')
 
         // Server updates position while paused
-        store.positionMs = 45000 // 0:45
+        store.lastServerPositionMs = 45000 // 0:45
         await nextTick()
 
         // Should sync immediately when paused
