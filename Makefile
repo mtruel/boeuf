@@ -73,6 +73,7 @@ docker-test-frontend: ## Run Frontend tests (Vitest, Docker)
 	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps frontend-dev sh -c "pnpm run test:unit --run"
 
 clean: ## Remove artifacts and volumes
-	docker compose down -v
+	docker compose $(COMPOSE_FILE_DEV) down -v --remove-orphans
+	docker compose $(COMPOSE_FILE_PROD) down -v --remove-orphans
 	rm -rf frontend/node_modules
 	rm -rf frontend/dist
