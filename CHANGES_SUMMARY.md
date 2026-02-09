@@ -53,10 +53,9 @@ This document summarizes all changes made to simplify the Boeuf deployment proce
 
 **Removed variables** (now internal):
 - `PORT` (fixed to 8080 internally)
-- `NODE_ENV` (fixed to production)
 - `SESSION_KEY` (derived from APP_SECRET)
 - `ENCRYPTION_KEY` (derived from APP_SECRET)
-- `ENV` (fixed to production)
+- `RUNTIME_ENV` (fixed to production in docker-compose)
 - `DATABASE_PATH` (fixed to /app/data/boeuf.db)
 
 #### `README.md`
@@ -67,12 +66,12 @@ This document summarizes all changes made to simplify the Boeuf deployment proce
 - Security notes about key usage
 - Reference to `DEPLOYMENT.md` for detailed deployment guide
 
-### 3. Unchanged Files (Backend Code)
+### 3. Backend Code Changes
 
-No changes were made to backend code. The backend already uses environment variables correctly:
+The backend code was updated to use the clearer `RUNTIME_ENV` variable instead of the ambiguous `ENV`:
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` for Spotify API
 - `SESSION_KEY` and `ENCRYPTION_KEY` for security
-- `PORT`, `NODE_ENV`, `SESSION_DURATION_HOURS`, etc. with proper defaults
+- `PORT`, `RUNTIME_ENV`, `SESSION_DURATION_HOURS`, etc. with proper defaults
 
 ## Architecture Comparison
 

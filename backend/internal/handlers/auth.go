@@ -31,7 +31,7 @@ func isAllowedReturnTo(returnTo string) bool {
 	}
 
 	if parsed.Scheme != "" || parsed.Host != "" {
-		if os.Getenv("ENV") != "production" {
+		if os.Getenv("RUNTIME_ENV") != "production" {
 			host := parsed.Hostname()
 			if strings.Contains(host, "localhost") || strings.Contains(host, "127.0.0.1") {
 				return true

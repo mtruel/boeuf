@@ -114,22 +114,18 @@ Ces variables ont des valeurs par défaut et peuvent être omises :
 - **PUBLIC_URL et SPOTIFY_REDIRECT_URI** : En production, ces URLs doivent correspondre à votre domaine public et être enregistrées dans la configuration de votre application Spotify.
 - Les données de la base de données SQLite sont stockées dans un volume Docker persistant.
 
-## Déploiement automatisé (GitHub Actions + Watchtower)
+## Déploiement automatisé (GitHub Actions)
 
-À chaque push sur `main` ou `dev`, les images Docker sont publiées sur GHCR :
+À chaque push sur `main` ou `dev`, l'image Docker unifiée est publiée sur GHCR :
 
-- `ghcr.io/<owner>/boeuf-backend`
-- `ghcr.io/<owner>/boeuf-frontend`
+- `ghcr.io/<owner>/boeuf:main` (branche main)
+- `ghcr.io/<owner>/boeuf:dev` (branche dev)
+- `ghcr.io/<owner>/boeuf:latest` (dernière version de main)
 
-Sur le homelab, utilisez `docker-compose.prod.yml` avec Watchtower :
-
-```bash
-export IMAGE_OWNER=<owner>
-export IMAGE_TAG=main
-docker compose -f docker-compose.prod.yml up -d
+Pour utiliser l'image pré-construite, commentez la ligne `build: .` dans `docker-compose.yml` et décommentez :
+```yaml
+image: ghcr.io/mtruel/boeuf:dev
 ```
-
-Si vous suivez la branche `dev`, utilisez `IMAGE_TAG=dev`.
 
 ## Stack technique
 

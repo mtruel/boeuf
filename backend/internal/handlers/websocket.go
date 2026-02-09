@@ -27,7 +27,7 @@ var upgrader = websocket.Upgrader{
 		}
 
 		// Development: allow localhost
-		if os.Getenv("ENV") != "production" {
+		if os.Getenv("RUNTIME_ENV") != "production" {
 			if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
 				return true
 			}

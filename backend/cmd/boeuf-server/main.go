@@ -42,7 +42,7 @@ func run() error {
 	dbPath := getEnv("DATABASE_PATH", "./data/boeuf.db")
 	publicURL := getEnv("PUBLIC_URL", "http://localhost:3000")
 	spotifyClientID := getEnv("SPOTIFY_CLIENT_ID", "")
-	isProduction := getEnv("ENV", "development") == "production"
+	isProduction := getEnv("RUNTIME_ENV", "development") == "production"
 
 	// Parse session duration from environment (in hours, default 24)
 	sessionDurationHours, err := strconv.Atoi(getEnv("SESSION_DURATION_HOURS", "24"))
@@ -167,7 +167,7 @@ func run() error {
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Backend server starting on %s", addr)
 	log.Printf("Database: %s", dbPath)
-	log.Printf("Environment: %s", getEnv("ENV", "development"))
+	log.Printf("Environment: %s", getEnv("RUNTIME_ENV", "development"))
 
 	server := &http.Server{
 		Addr:    addr,
@@ -222,7 +222,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		env := os.Getenv("ENV")
+		env := os.Getenv("RUNTIME_ENV")
 		if env == "production" {
 			// In production, Caddy handles CORS - don't set wildcard
 			next.ServeHTTP(w, r)

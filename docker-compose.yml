@@ -1,6 +1,7 @@
 services:
   boeuf:
     build: .
+    # To use pre-built image instead: image: ghcr.io/mtruel/boeuf:dev
     restart: unless-stopped
     ports:
       - "${EXPOSE_PORT:-3000}:80"
@@ -12,12 +13,11 @@ services:
       - APP_SECRET=${APP_SECRET}
       - EXPOSE_PORT=${EXPOSE_PORT:-3000}
       - PORT=8080
-      - NODE_ENV=production
       - SESSION_KEY=${APP_SECRET}
       - ENCRYPTION_KEY=${APP_SECRET}
       - SESSION_DURATION_HOURS=${SESSION_DURATION_HOURS:-24}
       - MAX_ACTIVE_SESSIONS_PER_USER=${MAX_ACTIVE_SESSIONS_PER_USER:-10}
-      - ENV=production
+      - RUNTIME_ENV=production
       - DATABASE_PATH=/app/data/boeuf.db
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:3000/auth/spotify/callback}
