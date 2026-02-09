@@ -65,12 +65,12 @@ docker-test: docker-test-backend docker-test-frontend ## Run all tests via Docke
 
 docker-test-backend: ## Run Backend tests (Go, Docker)
 	@echo "Running Backend Tests (Docker)..."
-	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps backend go test ./... -v
+	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps backend-dev go test ./... -v
 
 docker-test-frontend: ## Run Frontend tests (Vitest, Docker)
 	@echo "Running Frontend Tests (Docker)..."
 	# Run tests using the built dev container with all deps pre-installed
-	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps frontend sh -c "pnpm run test:unit --run"
+	docker compose $(COMPOSE_FILE_DEV) run --rm --no-deps frontend-dev sh -c "pnpm run test:unit --run"
 
 clean: ## Remove artifacts and volumes
 	docker compose down -v
