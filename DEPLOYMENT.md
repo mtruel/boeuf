@@ -137,10 +137,10 @@ Les données sont stockées dans un volume Docker. Pour sauvegarder :
 
 ```bash
 # Créer une sauvegarde
-docker run --rm -v boeuf_boeuf_data:/data -v $(pwd):/backup alpine tar czf /backup/boeuf-backup.tar.gz -C /data .
+docker run --rm -v boeuf_data:/data -v $(pwd):/backup alpine tar czf /backup/boeuf-backup.tar.gz -C /data .
 
 # Restaurer une sauvegarde
-docker run --rm -v boeuf_boeuf_data:/data -v $(pwd):/backup alpine tar xzf /backup/boeuf-backup.tar.gz -C /data
+docker run --rm -v boeuf_data:/data -v $(pwd):/backup alpine tar xzf /backup/boeuf-backup.tar.gz -C /data
 ```
 
 ## Résolution de problèmes
@@ -151,6 +151,15 @@ Vérifiez les logs :
 ```bash
 docker compose logs -f boeuf
 ```
+
+### Backend ne répond plus
+
+Si le backend crash, redémarrez le conteneur :
+```bash
+docker compose restart boeuf
+```
+
+**Note**: Le conteneur utilise une approche simple où le backend tourne en arrière-plan et Caddy au premier plan. Si le backend plante, le conteneur continue de tourner mais l'API ne répondra plus. Le redémarrage automatique (`restart: unless-stopped`) gère les crashes du conteneur complet.
 
 ### Erreur de connexion Spotify
 

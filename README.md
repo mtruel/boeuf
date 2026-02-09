@@ -110,7 +110,7 @@ Ces variables ont des valeurs par défaut et peuvent être omises :
 
 ### Notes importantes
 
-- **APP_SECRET** : Cette clé est utilisée pour chiffrer les tokens Spotify et sécuriser les sessions. Elle doit faire exactement 32 caractères hexadécimaux (16 octets).
+- **APP_SECRET** : Cette clé est utilisée pour chiffrer les tokens Spotify et sécuriser les sessions. Elle doit faire exactement 32 caractères hexadécimaux (16 octets). Pour simplifier le déploiement, la même clé est utilisée pour le chiffrement et les sessions. Pour une sécurité maximale en production critique, vous pourriez vouloir utiliser des clés séparées.
 - **PUBLIC_URL et SPOTIFY_REDIRECT_URI** : En production, ces URLs doivent correspondre à votre domaine public et être enregistrées dans la configuration de votre application Spotify.
 - Les données de la base de données SQLite sont stockées dans un volume Docker persistant.
 
