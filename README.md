@@ -77,6 +77,44 @@ docker compose up -d
 
 L'application sera accessible sur `http://localhost:3000` (ou le port défini dans `EXPOSE_PORT`).
 
+## GitHub Actions & CI/CD
+
+### Tests automatiques sur Pull Requests
+
+Tous les PRs vers `main` ou `dev` déclenchent automatiquement :
+- **Tests backend** : `go test ./...`
+- **Tests frontend** : `pnpm test:unit`
+
+Ces tests doivent réussir avant toute fusion.
+
+### Build automatique de l'image Docker unifiée sur Pull Requests
+
+**Architecture simplifiée !** À chaque commit sur un PR, une **image Docker unifiée** est automatiquement buildée et publiée :
+
+- **Workflow** : `PR Build`
+- **Image publiée** : `ghcr.io/<owner>/boeuf` (contient backend + frontend + Caddy)
+- **Tags disponibles** :
+  - `pr-<number>` (dernière version du PR)
+  - `pr-<number>-<commit-sha>` (commit spécifique)
+
+L'image unifiée contient tout ce dont vous avez besoin :
+- ✅ Backend Go avec SQLite
+- ✅ Frontend Vue.js buildé
+- ✅ Caddy comme reverse proxy
+- ✅ Prêt à déployer avec une seule commande !
+
+Un commentaire est automatiquement ajouté sur le PR avec les instructions de test.
+
+### Build manuel (optionnel)
+
+Si besoin, vous pouvez aussi déclencher **manuellement** un build :
+
+1. Allez dans l'onglet **Actions** du repository GitHub
+2. Sélectionnez le workflow **"Manual Build Check"**
+3. Cliquez sur **"Run workflow"**
+4. Entrez le numéro du PR à builder
+5. Le workflow va builder et publier l'image Docker unifiée
+
 **Pour plus de détails sur le déploiement, consultez [DEPLOYMENT.md](./DEPLOYMENT.md)**
 
 ## Configuration des variables d'environnement
@@ -126,6 +164,20 @@ Pour utiliser l'image pré-construite, commentez la ligne `build: .` dans `docke
 ```yaml
 image: ghcr.io/mtruel/boeuf:dev
 ```
+
+**Déploiement en une commande :**
+
+```bash
+docker run -d \
+  -p 3000:80 \
+  -v boeuf_data:/app/data \
+  -e SPOTIFY_CLIENT_ID=your_client_id \
+  -e SPOTIFY_CLIENT_SECRET=your_client_secret \
+  -e APP_SECRET=your_32_char_hex_key \
+  ghcr.io/<owner>/boeuf:latest
+```
+
+L'application sera accessible sur `http://localhost:3000`.
 
 ## Stack technique
 

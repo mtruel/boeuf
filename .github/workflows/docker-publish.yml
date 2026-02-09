@@ -34,8 +34,8 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata (unified)
-        id: meta_unified
+      - name: Docker metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ env.IMAGE_OWNER_LC }}/boeuf
@@ -50,7 +50,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta_unified.outputs.tags }}
-          labels: ${{ steps.meta_unified.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

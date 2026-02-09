@@ -31,11 +31,11 @@ export const formatTime = (ms: number): string => {
 export function usePlayerProgress() {
     const playerStore = usePlayerStore()
 
-    // Local interpolated position
-    const interpolatedPositionMs = ref(0)
-    const lastServerPositionMs = ref(0)
-    const lastServerUpdateAt = ref<number | null>(null)
-    const isPlaying = ref(false)
+    // Local interpolated position - initialize from store
+    const interpolatedPositionMs = ref(playerStore.positionMs || 0)
+    const lastServerPositionMs = ref(playerStore.positionMs || 0)
+    const lastServerUpdateAt = ref<number | null>(Date.now())
+    const isPlaying = ref(playerStore.isPlaying)
 
     // Animation frame ID for cleanup
     let animationFrameId: number | null = null

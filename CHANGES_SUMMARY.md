@@ -139,7 +139,7 @@ The backend code was updated to use the clearer `RUNTIME_ENV` variable instead o
 ## Migration Path
 
 For existing users:
-1. The old `docker-compose.prod.yml` and `docker-compose.dev.yml` still exist for reference
+1. The old `docker-compose.dev.yml` still exists for reference
 2. Backend code unchanged, so no breaking changes
 3. Environment variables are backward compatible (just subset of what was before)
 4. Data persists in volume (no data migration needed)

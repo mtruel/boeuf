@@ -11,13 +11,13 @@
         Access-Control-Allow-Credentials "true"
     }
 
-    # Reverse proxy for API and auth endpoints
+    # Reverse proxy for API and auth endpoints (backend runs on localhost:8080)
     handle /api/* {
-        reverse_proxy backend:8080
+        reverse_proxy localhost:8080
     }
 
     handle /auth/* {
-        reverse_proxy backend:8080
+        reverse_proxy localhost:8080
     }
 
     # Handle SPA routing for Vue
