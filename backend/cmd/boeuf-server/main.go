@@ -152,6 +152,7 @@ func run() error {
 	accessControl := handlers.NewAccessControlMiddleware(sessionStore, db)
 	registerParticipantRoutes(router, accessControl, []routeDefinition{
 		{method: http.MethodGet, path: "/api/sessions/{sessionId}", handler: sessionHandler.GetSession},
+		{method: http.MethodGet, path: "/api/sessions/{sessionId}/debug", handler: sessionHandler.DebugSession},
 		{method: http.MethodGet, path: "/api/sessions/{sessionId}/me", handler: sessionHandler.GetParticipantMe},
 		{method: http.MethodPost, path: "/api/sessions/{sessionId}/sync/start", handler: sessionHandler.StartSync},
 		{method: http.MethodGet, path: "/api/sessions/{sessionId}/player/state", handler: playerHandler.GetPlayerState},

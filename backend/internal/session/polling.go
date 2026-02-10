@@ -3,6 +3,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -274,17 +275,55 @@ func (p *PlayerPoller) broadcastEvent(sessionID, userID, eventType string, state
 
 	// Build player state payload
 	playerState := map[string]interface{}{
-		"isPlaying":  state.IsPlaying,
-		"positionMs": state.PositionMs,
-		"track":      track,
-		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"isPlaying":    state.IsPlaying,
+		"positionMs":   state.PositionMs,
+		"track":        track,
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
+		"source":       "poller",
+		"polledUserId": userID,
 	}
 
+	var eventSeq int64
 	switch eventType {
 	case "TRACK_CHANGED":
-		p.hub.BroadcastTrackChanged(sessionID, userID, playerState)
+		eventSeq = p.hub.BroadcastTrackChanged(sessionID, userID, playerState)
 	default:
 		// PLAYER_STATE_UPDATE - polling broadcast uses canonical schema (no userId)
-		p.hub.BroadcastPlayerStateUpdate(sessionID, playerState)
+		eventSeq = p.hub.BroadcastPlayerStateUpdate(sessionID, playerState)
 	}
+
+	if err := p.persistEvent(sessionID, eventSeq, eventType, playerState); err != nil {
+		log.Printf("[Poller] Failed to persist %s event for session %s: %v", eventType, sessionID, err)
+	}
+}
+
+func (p *PlayerPoller) persistEvent(sessionID string, eventSeq int64, eventType string, payload interface{}) error {
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	event := &models.Event{
+		SessionID:   sessionID,
+		EventSeq:    eventSeq,
+		EventType:   eventType,
+		PayloadJSON: string(payloadJSON),
+	}
+
+	maxRetries := 3
+	backoff := 50 * time.Millisecond
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := p.db.Create(event).Error; err != nil {
+			if attempt < maxRetries-1 {
+				log.Printf("[Poller] Failed to persist event (attempt %d/%d): %v", attempt+1, maxRetries, err)
+				time.Sleep(backoff)
+				backoff *= 2
+				continue
+			}
+			return fmt.Errorf("failed to persist event after %d attempts: %w", maxRetries, err)
+		}
+		return nil
+	}
+	return nil
 }
