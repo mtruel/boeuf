@@ -356,8 +356,11 @@ func TestSpotifyAuthCallbackTokenExchangeError(t *testing.T) {
 
 	handler.Callback(callbackW, callbackReq)
 
-	if callbackW.Code != http.StatusInternalServerError {
-		t.Errorf("Expected status 500, got %d", callbackW.Code)
+	if callbackW.Code != http.StatusFound {
+		t.Errorf("Expected status 302, got %d", callbackW.Code)
+	}
+	if location := callbackW.Header().Get("Location"); location != "/?auth_error=spotify_auth_failed" {
+		t.Errorf("Expected redirect to '/?auth_error=spotify_auth_failed', got %s", location)
 	}
 }
 
