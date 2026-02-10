@@ -193,7 +193,11 @@ func (h *SpotifyAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	result, err := h.tokenService.ExchangeCodeForTokens(r.Context(), code, codeVerifier, clientID, redirectURI)
 	if err != nil {
 		log.Printf("ERROR: Token exchange failed: %v", err)
-		http.Error(w, "Token exchange failed", http.StatusInternalServerError)
+		errorCode := "spotify_auth_failed"
+		if strings.Contains(err.Error(), "failed to get user info") {
+			errorCode = "spotify_user_not_allowed"
+		}
+		http.Redirect(w, r, "/?auth_error="+url.QueryEscape(errorCode), http.StatusFound)
 		return
 	}
 

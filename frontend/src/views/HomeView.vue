@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button'
 import AuthStatus from '@/components/AuthStatus.vue'
 import CreateSessionComponent from '@/components/CreateSessionComponent.vue'
 import TheWelcome from '../components/TheWelcome.vue'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const healthStatus = ref<'loading' | 'ok' | 'error'>('loading')
 const backendData = ref<any>(null)
 const isAuthenticated = ref(false)
@@ -71,9 +73,26 @@ function handlePostLoginRedirect() {
   }
 }
 
+function handleAuthError() {
+  const authError = route.query.auth_error
+  if (!authError || typeof authError !== 'string') {
+    return
+  }
+
+  if (authError === 'spotify_user_not_allowed') {
+    toast.error('Acces Spotify refuse', 'Votre compte doit etre ajoute par le developpeur dans la console Spotify (mode developpement).')
+  } else {
+    toast.error('Connexion Spotify impossible', 'Veuillez reessayer ou contacter le support.')
+  }
+
+  const { auth_error, ...rest } = route.query
+  router.replace({ query: rest })
+}
+
 onMounted(() => {
   checkHealth()
   checkAuthStatus()
+  handleAuthError()
 })
 
 // Re-check auth status when AuthStatus component emits updates
