@@ -1,7 +1,8 @@
 services:
   boeuf:
     container_name: boeuf
-    build: .
+    # build: .
+    image: ghcr.io/mtruel/boeuf:dev
     # To use pre-built image instead: image: ghcr.io/mtruel/boeuf:dev
     restart: unless-stopped
     ports:

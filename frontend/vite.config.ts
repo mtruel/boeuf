@@ -16,6 +16,11 @@ export default defineConfig({
   ],
   server: {
     proxy: {
+      '/ws': {
+        target: 'ws://backend-dev:8080',
+        ws: true,
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://backend-dev:8080',
         changeOrigin: true,
